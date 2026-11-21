@@ -3,7 +3,12 @@
 A browser-based, non-destructive RAW photo developer. Files are decoded and
 edited locally; nothing is uploaded.
 
-## Run
+## Use it
+
+The latest version is published at https://djury74.github.io/rawlab/ and
+updates automatically on every push to `main`.
+
+## Run locally
 
 ```bash
 npm install
