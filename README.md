@@ -56,10 +56,10 @@ CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 ## Shortcuts
 
 `Ctrl+O` open, `Ctrl+E` export, `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo,
-`\` before/after, `R` crop, `W` white balance picker, `J` clipping warning,
+`\` before/after, `R` crop, `H` heal (spot removal), `W` white balance picker, `J` clipping warning,
 `F` fit, `1` 100%, left and right arrows for the previous and next photo in the strip. With a brush selected: `[` `]` size, `X` erase, hold `Space` to pan. Double-click a slider's name to reset it.
 
 ## Not built yet
 
-Healing, lens profiles beyond the one above, embedded colour profiles other
+Lens profiles beyond the one above, embedded colour profiles other
 than sRGB, and a multi-image library.

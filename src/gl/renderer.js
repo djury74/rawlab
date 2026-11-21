@@ -169,7 +169,7 @@ export class Renderer {
   // Low-resolution blurred copy of the whole frame, used for local tone and clarity.
   #updateBlur(g, s, lens) {
     const gl = this.gl;
-    const key = [this.src.id, s.rot, s.flipH, s.flipV, JSON.stringify(lens)].join();
+    const key = [this.src.id, s.rot, s.flipH, s.flipV, JSON.stringify(lens), JSON.stringify(s.spots || [])].join();
     const k = BLUR_EDGE / Math.max(g.Wf, g.Hf);
     const bw = Math.max(8, Math.round(g.Wf * k)), bh = Math.max(8, Math.round(g.Hf * k));
     const a = this.#target('blurA', bw, bh), b = this.#target('blurB', bw, bh);
@@ -178,6 +178,7 @@ export class Renderer {
     this.#draw(this.progs.geom, a.tex, bw, bh, { uSrc: this.src.tex }, (gl, u) => {
       this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, bw, bh, g.frameToSrc);
       this.#lensUniforms(gl, u, lens);
+      this.#spotUniforms(gl, u, s.spots);
     });
     this.#draw(this.progs.blur, b.tex, bw, bh, { uTex: a.tex }, (gl, u) => gl.uniform2f(u.uDir, 1 / bw, 0));
     this.#draw(this.progs.blur, a.tex, bw, bh, { uTex: b.tex }, (gl, u) => gl.uniform2f(u.uDir, 0, 1 / bh));
@@ -212,6 +213,7 @@ export class Renderer {
     this.#draw(this.progs.geom, view.tex, w, h, { uSrc: this.src.tex }, (gl, u) => {
       this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, w, h, g.frameToSrc);
       this.#lensUniforms(gl, u, lens);
+      this.#spotUniforms(gl, u, s.spots);
     });
 
     if ((s.nrLuma > 0 || s.nrColor > 0) && px > 0.4) {
@@ -269,6 +271,15 @@ export class Renderer {
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.maskTex);
       gl.uniform1i(u.uLMask, 7);
     });
+  }
+
+  #spotUniforms(gl, u, spots = []) {
+    const n = Math.min(spots.length, 40);
+    const a = new Float32Array(160), r = new Float32Array(80);
+    for (let i = 0; i < n; i++) { const s = spots[i]; a.set([s.x, s.y, s.sx, s.sy], i * 4); r.set([s.r, s.f], i * 2); }
+    gl.uniform1i(u.uSpotN, n);
+    gl.uniform4fv(u.uSpot, a); gl.uniform2fv(u.uSpotR, r);
+    gl.uniform2f(u.uSize, this.src.w, this.src.h);
   }
 
   // lens: { dist: [a, b, c], tca: [kr, kb], vig: [k1, k2, k3] } or null

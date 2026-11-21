@@ -1,5 +1,5 @@
 import LibRaw from 'libraw-wasm-nothread';
-import { asShotFromCamera } from './color.js';
+import { asShotFromCamera, estimateNeutral } from './color.js';
 
 const BITMAP_TYPES = /\.(jpe?g|png|webp|avif|gif|bmp)$/i;
 
@@ -50,7 +50,8 @@ async function loadRaw(file) {
       asShot: asShot || { temp: 5500, tint: 0 }, asShotKnown: !!asShot,
       info: describe(meta),
       shot: shotInfo(meta),
-      autoExposure: autoExposure(data, scale),
+      tone: toneStats(data, scale),
+      neutral: () => estimateNeutral(sampleRaw(data, scale)),
       sample(x, y, r = 2) {
         const acc = [0, 0, 0]; let n = 0;
         for (let j = Math.max(0, y - r); j <= Math.min(height - 1, y + r); j++) {
@@ -102,23 +103,35 @@ function trimToCameraSize(data, width, height, meta) {
   return { data: out, width: cw, height: ch };
 }
 
-// Exposure (in stops) that brings the brightest 1% of the photo up to half of
-// white, which the Standard tone curve then renders as a bright highlight. It only ever brightens: a photo that already uses the range gets 0.
-function autoExposure(data, scale) {
+// Brightness statistics for the automatic tone controls: luminance at the
+// 0.5th, 99th and 99.9th percentiles (linear, 1.0 = nominal white), and the
+// exposure in stops that brings the 99th percentile to half of white. The
+// Standard tone curve renders that as a bright highlight; brighter targets
+// washed out indoor shots. Exposure only ever brightens.
+function toneStats(data, scale) {
   const hist = new Uint32Array(4096);
   let n = 0;
   for (let i = 0; i < data.length; i += 3 * 61) {
     const l = 0.2126 * LINEAR[data[i]] + 0.7152 * LINEAR[data[i + 1]] + 0.0722 * LINEAR[data[i + 2]];
     hist[Math.min(4095, Math.round(Math.sqrt(Math.min(1, l)) * 4095))]++; n++;
   }
-  let acc = 0, bin = 4095;
-  for (; bin > 0; bin--) { acc += hist[bin]; if (acc >= n * 0.01) break; }
-  const p99 = (bin / 4095) ** 2 * scale;
-  if (!(p99 > 0)) return 0;
-  // Target chosen so the result sits where typical raw viewers put it; brighter
-  // targets washed out indoor shots.
-  const ev = Math.log2(0.5 / p99);
-  return Math.round(Math.min(2.5, Math.max(0, ev)) * 20) / 20;
+  const above = (fraction) => {            // luminance that `fraction` of the photo is brighter than
+    let acc = 0, bin = 4095;
+    for (; bin > 0; bin--) { acc += hist[bin]; if (acc >= n * fraction) break; }
+    return (bin / 4095) ** 2 * scale;
+  };
+  const p99 = above(0.01);
+  const ev = p99 > 0 ? Math.round(Math.min(2.5, Math.max(0, Math.log2(0.5 / p99))) * 20) / 20 : 0;
+  return { low: above(0.995), p99, high: above(0.001), exposure: ev };
+}
+
+// A few hundred thousand linear RGB samples for estimating white balance.
+function sampleRaw(data, scale) {
+  const step = Math.max(1, Math.floor(data.length / 3 / 200000)) * 3;
+  const out = new Float32Array(Math.ceil(data.length / step) * 3);
+  let o = 0;
+  for (let i = 0; i + 2 < data.length; i += step) { out[o++] = LINEAR[data[i]] * scale; out[o++] = LINEAR[data[i + 1]] * scale; out[o++] = LINEAR[data[i + 2]] * scale; }
+  return out.subarray(0, o);
 }
 
 async function loadBitmap(file) {
@@ -131,6 +144,14 @@ async function loadBitmap(file) {
     asShot: { temp: 5500, tint: 0 }, asShotKnown: false,
     info: { camera: 'Rendered image (not RAW)', lens: '', exposure: '' },
     shot: null,
+    tone: null,
+    neutral() {
+      const c = new OffscreenCanvas(256, Math.max(1, Math.round(256 * height / width))), ctx = c.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, c.width, c.height);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data, out = new Float32Array(d.length / 4 * 3);
+      for (let i = 0, o = 0; i < d.length; i += 4) { out[o++] = lin(d[i]); out[o++] = lin(d[i + 1]); out[o++] = lin(d[i + 2]); }
+      return estimateNeutral(out);
+    },
     sample(x, y) {
       probe.clearRect(0, 0, 5, 5);
       probe.drawImage(bitmap, x - 2, y - 2, 5, 5, 0, 0, 5, 5);

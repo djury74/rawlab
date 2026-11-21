@@ -26,6 +26,7 @@ export function defaults() {
     crop: { cx: 0.5, cy: 0.5, w: 1, h: 1, angle: 0, aspect: 'original' },
     rot: 0, flipH: false, flipV: false,
     lens: { profile: 'auto', distortion: 100, vignetting: 100, ca: true },
+    spots: [],                // spot removal: { x, y, sx, sy, r, f } in image coordinates
     locals: [],               // local adjustments: gradient, radial and brush masks
   };
 }
@@ -45,7 +46,7 @@ export function normalise(partial) {
 }
 
 // Per-image settings that presets and copy/paste leave alone.
-const GEOMETRY_KEYS = ['crop', 'rot', 'flipH', 'flipV', 'locals', 'lens'];
+const GEOMETRY_KEYS = ['crop', 'rot', 'flipH', 'flipV', 'locals', 'lens', 'spots'];
 
 // Settings without crop/rotation: what presets and copy/paste carry.
 export function lookOnly(s) {

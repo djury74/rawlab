@@ -94,8 +94,8 @@ button.big { padding: 8px 18px; font-size: 14px; }
 .spinner { width: 28px; height: 28px; border: 3px solid #444; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-#cropbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(34,34,34,0.96); border: 1px solid var(--line); border-radius: 8px; width: max-content; max-width: calc(100% - 24px); flex-wrap: wrap; justify-content: center; }
-#cropbar .slider { width: 240px; grid-template-columns: 44px 1fr 50px; }
+#cropbar, #healbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(34,34,34,0.96); border: 1px solid var(--line); border-radius: 8px; width: max-content; max-width: calc(100% - 24px); flex-wrap: wrap; justify-content: center; }
+#cropbar .slider, #healbar .slider { width: 240px; grid-template-columns: 44px 1fr 50px; }
 #beforeTag { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.7); padding: 3px 10px; border-radius: 4px; font-weight: 600; }
 #toast { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: #2f2f2f; border: 1px solid #4a4a4a; padding: 8px 14px; border-radius: 6px; max-width: 80%; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
 #toast.error { border-color: #b3473d; }

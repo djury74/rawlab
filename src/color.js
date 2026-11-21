@@ -116,6 +116,29 @@ export function neutraliseToTempTint(asShot, rgb) {
   return xyzToTempTint(mul3(SRGB_TO_XYZ, target));
 }
 
+// Estimate the colour of "neutral" in a photo from linear RGB samples (a flat
+// Float32Array of r, g, b, already balanced as shot). Only pixels that look
+// roughly grey are averaged, starting from the camera's own balance and
+// narrowing each pass, so large coloured areas (foliage, sky, a sunset) do not
+// drag the result. Returns null if too little of the photo is near grey.
+export function estimateNeutral(samples) {
+  const n = samples.length / 3;
+  let est = [1, 1, 1];
+  for (const tolerance of [0.4, 0.3, 0.22, 0.22]) {
+    const sum = [0, 0, 0]; let used = 0;
+    for (let i = 0; i < samples.length; i += 3) {
+      const r = samples[i], g = samples[i + 1], b = samples[i + 2];
+      if (Math.max(r, g, b) > 0.9 || 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.01) continue;   // clipped or too dark to trust
+      const a = r / est[0], c = g / est[1], d = b / est[2], hi = Math.max(a, c, d), lo = Math.min(a, c, d);
+      if ((hi - lo) / hi > tolerance) continue;                                                // clearly coloured
+      sum[0] += r; sum[1] += g; sum[2] += b; used++;
+    }
+    if (used < n * 0.02 || !(sum[1] > 0)) return null;
+    est = [sum[0] / sum[1], 1, sum[2] / sum[1]];
+  }
+  return est.every((v) => v > 0.05 && v < 20) ? est : null;
+}
+
 // Monotone cubic interpolation (Fritsch-Carlson) through curve points.
 export function curveSampler(points) {
   const p = [...points].sort((a, b) => a[0] - b[0]);

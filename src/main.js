@@ -11,6 +11,7 @@ import { initLocals } from './ui/locals.js';
 import { LENS_PROFILES, detectProfile, activeProfile, lensParams } from './lens.js';
 import { withExif, tiff16, tiff16Size } from './export.js';
 import { initBrowser } from './ui/browser.js';
+import { initHeal } from './ui/heal.js';
 
 const $ = (id) => document.getElementById(id);
 const DEF = defaults();
@@ -58,7 +59,7 @@ const editKey = (src) => `rawlab:edit:${src.name}:${src.size}`;
 // Rendered images (JPEG, PNG) already carry a tone curve, so they start flat.
 function freshSettings() {
   const s = defaults(), src = state.source;
-  if (src?.kind === 'raw') s.exposure = src.autoExposure || 0;
+  if (src?.kind === 'raw') s.exposure = src.tone?.exposure || 0;
   if (src?.kind === 'bitmap') s.profile = 'linear';
   return s;
 }
@@ -250,9 +251,10 @@ function updateButtons() {
   const has = !!state.source;
   $('btnUndo').disabled = state.hIndex <= 0;
   $('btnRedo').disabled = state.hIndex >= state.history.length - 1;
-  for (const id of ['btnReset', 'btnCrop', 'btnBefore', 'btnClip', 'btnFit', 'btn100', 'btnExport', 'btnCopy', 'btnSaveJson', 'btnLoadJson', 'btnSavePreset']) $(id).disabled = !has;
+  for (const id of ['btnReset', 'btnCrop', 'btnHeal', 'btnBefore', 'btnClip', 'btnFit', 'btn100', 'btnExport', 'btnCopy', 'btnSaveJson', 'btnLoadJson', 'btnSavePreset']) $(id).disabled = !has;
   $('btnPaste').disabled = !has || !localStorage.getItem('rawlab:clipboard');
   $('btnCrop').classList.toggle('on', state.tool === 'crop');
+  $('btnHeal').classList.toggle('on', state.tool === 'heal');
   $('btnBefore').classList.toggle('on', state.showBefore);
   $('btnClip').classList.toggle('on', state.clip);
   $('btnFit').classList.toggle('on', state.view.fit);
@@ -274,24 +276,64 @@ const WB_PRESETS = { daylight: [5500, 10], cloudy: [6500, 10], shade: [7500, 10]
 const wbSelect = el('select', { 'aria-label': 'White balance preset', onchange: () => {
   const v = wbSelect.value, s = state.settings;
   if (v === 'asShot') { s.temp = null; s.tint = null; } else if (WB_PRESETS[v]) { [s.temp, s.tint] = WB_PRESETS[v]; }
+  else if (v === 'auto') {
+    const wb = autoWhiteBalance();
+    if (wb) { s.temp = wb.temp; s.tint = wb.tint; } else toast('Could not judge the white balance of this photo. Try the Pick tool on something grey.', true);
+  }
   refreshAll(); commit('White balance: ' + wbSelect.selectedOptions[0].textContent);
-} }, [['asShot', 'As shot'], ['daylight', 'Daylight'], ['cloudy', 'Cloudy'], ['shade', 'Shade'], ['tungsten', 'Tungsten'], ['fluorescent', 'Fluorescent'], ['flash', 'Flash'], ['custom', 'Custom']]
+} }, [['asShot', 'As shot'], ['daylight', 'Daylight'], ['cloudy', 'Cloudy'], ['shade', 'Shade'], ['tungsten', 'Tungsten'], ['fluorescent', 'Fluorescent'], ['flash', 'Flash'], ['auto', 'Auto'], ['custom', 'Custom']]
   .map(([v, t]) => el('option', { value: v }, t)));
 const wbPick = el('button', { type: 'button', title: 'Click something in the photo that should be neutral grey (W)', onclick: () => setTool(state.tool === 'wb' ? 'none' : 'wb') }, 'Pick');
 const profileSelect = el('select', { 'aria-label': 'Profile', onchange: () => { state.settings.profile = profileSelect.value; requestRender(); commit('Profile: ' + profileSelect.value); } },
   [['standard', 'Standard'], ['vivid', 'Vivid'], ['linear', 'Linear (flat)']].map(([v, t]) => el('option', { value: v }, t)));
 const bwCheck = el('input', { type: 'checkbox', onchange: () => { state.settings.bw = bwCheck.checked; requestRender(); commit(bwCheck.checked ? 'Black and white' : 'Colour'); } });
 
+// White balance estimated from the photo itself. Applied at 80% strength:
+// a full correction tends to strip out warmth that belongs in the scene.
+function autoWhiteBalance() {
+  const src = state.source;
+  if (!src) return null;
+  if (src.autoWB === undefined) {
+    const n = src.neutral();
+    if (!n) src.autoWB = null;
+    else {
+      const full = neutraliseToTempTint(src.asShot, n), a = src.asShot, k = 0.8;
+      const mired = 1e6 / a.temp + k * (1e6 / full.temp - 1e6 / a.temp);
+      src.autoWB = {
+        temp: Math.min(T_MAX, Math.max(T_MIN, Math.round(1e5 / mired) * 10)),
+        tint: Math.min(150, Math.max(-150, Math.round(a.tint + k * (full.tint - a.tint)))),
+      };
+    }
+  }
+  return src.autoWB;
+}
+
+// Auto tone: exposure from the brightest part of the photo, then black and
+// white points so the photo spans the range. Each value lands on its slider.
+function autoTone() {
+  const t = state.source?.tone;
+  if (!t) return;
+  const s = state.settings, gain = 2 ** t.exposure;
+  const low = t.low * gain, high = t.high * gain;
+  const e = Math.sqrt(Math.min(1, low));
+  s.exposure = t.exposure;
+  s.blacks = Math.round(Math.min(0, Math.max(-40, -(low - 0.004) / (0.05 * (1 - e) ** 3) * 100)));
+  s.whites = high > 0 ? Math.round(Math.min(40, Math.max(-30, Math.log2(0.8 / high) / (0.8 * Math.min(1, high)) * 100))) : 0;
+  refreshAll(); commit('Auto tone');
+}
+
 // Starting brightness: as the camera exposed it, or lifted automatically.
 const setStart = (auto) => {
   if (!state.source) return;
-  state.settings.exposure = auto ? state.source.autoExposure || 0 : 0;
+  state.settings.exposure = auto ? state.source.tone?.exposure || 0 : 0;
   refreshAll(); commit(auto ? 'Auto exposure' : 'Exposure as shot');
 };
 const startButtons = [
   el('button', { type: 'button', title: 'Exposure exactly as the camera recorded it', onclick: () => setStart(false) }, 'As shot'),
   el('button', { type: 'button', title: 'Brighten so the photo uses the available range', onclick: () => setStart(true) }, 'Auto'),
 ];
+
+const autoToneBtn = el('button', { class: 'link', type: 'button', title: 'Set exposure, whites and blacks automatically so the photo uses the full range', onclick: autoTone }, 'Auto tone');
 
 const basic = [
   el('div', { class: 'row' }, el('span', {}, 'Profile'), profileSelect, el('label', { class: 'check' }, bwCheck, 'B&W')),
@@ -308,7 +350,7 @@ const basic = [
     get: () => state.settings.tint, set: (v) => { state.settings.tint = v; },
     onInput: () => { syncSelects(); requestRender(); }, onCommit: commit,
   })),
-  el('div', { class: 'sub' }, 'Tone'),
+  el('div', { class: 'tabs', style: 'margin:10px 0 2px' }, el('div', { class: 'sub', style: 'margin:0' }, 'Tone'), autoToneBtn),
   el('div', { class: 'row' }, el('span', {}, 'Brightness'), startButtons),
   S('Exposure', 'exposure', { min: -5, max: 5, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2), onInput: () => { syncStart(); requestRender(); } }),
   S('Contrast', 'contrast'), S('Highlights', 'highlights'), S('Shadows', 'shadows'), S('Whites', 'whites'), S('Blacks', 'blacks'),
@@ -361,6 +403,7 @@ const screenToSrc = (p) => state.g.frameToSrc(applyAffine(state.af, p[0], p[1]))
 const srcToScreen = (uv) => invertAffine(state.af, state.g.srcToFrame(uv));
 const locals = initLocals({ state, renderer, requestRender, commit, setTool, toast, screenToSrc, srcToScreen });
 $('panels').children[0].after(locals.node);
+const heal = initHeal({ node: $('healbar'), state, requestRender, commit, setTool, toast, screenToSrc, srcToScreen });
 
 /* ---------- lens corrections ---------- */
 
@@ -396,10 +439,11 @@ function syncLens() {
 }
 
 function syncStart() {
-  const e = state.settings.exposure, auto = state.source?.autoExposure || 0;
+  const e = state.settings.exposure, auto = state.source?.tone?.exposure || 0;
   startButtons[0].classList.toggle('on', !!state.source && e === 0);
   startButtons[1].classList.toggle('on', !!state.source && auto > 0 && Math.abs(e - auto) < 0.005);
   startButtons[1].disabled = !state.source || state.source.kind !== 'raw';
+  autoToneBtn.disabled = !state.source?.tone;
   startButtons[1].textContent = auto > 0 ? `Auto (+${auto.toFixed(2)})` : 'Auto';
 }
 
@@ -410,7 +454,9 @@ function syncSelects() {
   profileSelect.value = s.profile;
   bwCheck.checked = s.bw;
   let wb = 'custom';
+  const auto = state.source?.autoWB;
   if (s.temp == null && s.tint == null) wb = 'asShot';
+  else if (auto && s.temp === auto.temp && s.tint === auto.tint) wb = 'auto';
   else for (const [k, [t, ti]] of Object.entries(WB_PRESETS)) if (s.temp === t && s.tint === ti) { wb = k; break; }
   wbSelect.value = wb;
 }
@@ -420,6 +466,7 @@ function refreshAll() {
   for (const c of controls) c.refresh();
   for (const c of cropControls) c.refresh();
   locals.refresh();
+  heal.refresh();
   refreshHistory();
   updateButtons();
   requestRender();
@@ -607,6 +654,8 @@ function setTool(tool) {
   state.tool = tool;
   if (tool === 'crop') state.showBefore = false;
   $('cropbar').hidden = tool !== 'crop';
+  $('healbar').hidden = tool !== 'heal';
+  if (tool !== 'heal') heal.deselect();
   wbPick.classList.toggle('on', tool === 'wb');
   if (tool !== 'local') locals.cancelCreate();
   locals.refresh();
@@ -615,7 +664,7 @@ function setTool(tool) {
   requestRender();
 }
 
-const idleCursor = () => (state.tool === 'wb' ? 'crosshair' : state.tool === 'local' ? locals.cursorStyle() : 'default');
+const idleCursor = () => (state.tool === 'wb' || state.tool === 'heal' ? 'crosshair' : state.tool === 'local' ? locals.cursorStyle() : 'default');
 
 // Crop rectangle in overlay device pixels, derived from the current view mapping.
 function cropRectOnScreen() {
@@ -638,6 +687,7 @@ function drawOverlay() {
     octx.setTransform(d, 0, 0, d, 0, 0);
     drawCrop(octx, overlay.width / d, overlay.height / d, { x0: r.x0 / d, y0: r.y0 / d, x1: r.x1 / d, y1: r.y1 / d });
   }
+  if (state.tool === 'heal' && state.af && !state.showBefore) heal.draw(octx);
   if (state.tool === 'local' && state.af && !state.showBefore) {
     locals.draw(octx);
     if (!drag) overlay.style.cursor = spaceHeld ? 'grab' : idleCursor();
@@ -656,6 +706,12 @@ overlay.addEventListener('pointerdown', (e) => {
   if (!state.source || e.button !== 0) return;
   const p = devicePoint(e);
   if (state.tool === 'wb') { pickWhiteBalance(p); return; }
+  if (state.tool === 'heal' && !spaceHeld && heal.pointerDown(p)) {
+    drag = { type: 'heal' };
+    overlay.setPointerCapture(e.pointerId);
+    requestRender();
+    return;
+  }
   if (state.tool === 'local' && !spaceHeld && locals.pointerDown(p)) {
     drag = { type: 'local' };
     overlay.setPointerCapture(e.pointerId);
@@ -676,6 +732,11 @@ overlay.addEventListener('pointerdown', (e) => {
 
 overlay.addEventListener('pointermove', (e) => {
   const p = devicePoint(e);
+  if (state.tool === 'heal') {
+    heal.pointerMove(p);
+    if (drag?.type === 'heal') { requestRender(); return; }
+    if (!drag) drawOverlay();
+  }
   if (state.tool === 'local') {
     locals.pointerMove(p);
     if (drag?.type === 'local') { requestRender(); return; }
@@ -711,8 +772,9 @@ overlay.addEventListener('pointermove', (e) => {
 const endDrag = () => {
   if (!drag) return;
   if (drag.type === 'crop') commit('Crop');
-  const wasLocal = drag.type === 'local';
+  const wasLocal = drag.type === 'local', wasHeal = drag.type === 'heal';
   drag = null;
+  if (wasHeal) { heal.pointerUp(); requestRender(); }
   if (wasLocal) { locals.pointerUp(); requestRender(); }
   overlay.style.cursor = idleCursor();
 };
@@ -918,6 +980,7 @@ $('btnUndo').addEventListener('click', () => restore(state.hIndex - 1));
 $('btnRedo').addEventListener('click', () => restore(state.hIndex + 1));
 $('btnReset').addEventListener('click', () => { state.settings = freshSettings(); state.view.fit = true; refreshAll(); commit('Reset all'); });
 $('btnCrop').addEventListener('click', () => setTool(state.tool === 'crop' ? 'none' : 'crop'));
+$('btnHeal').addEventListener('click', () => setTool(state.tool === 'heal' ? 'none' : 'heal'));
 $('btnBefore').addEventListener('click', () => { state.showBefore = !state.showBefore; updateButtons(); requestRender(); });
 $('btnClip').addEventListener('click', () => { state.clip = !state.clip; updateButtons(); requestRender(); });
 $('btnFit').addEventListener('click', () => { state.view.fit = true; updateButtons(); requestRender(); });
@@ -933,6 +996,11 @@ window.addEventListener('keydown', (e) => {
   if (mod && k === 'e') return run(() => $('btnExport').click());
   if (mod || e.altKey || !state.source) return;
   if (e.key === ' ' && !e.target.matches('button, summary, input')) { e.preventDefault(); spaceHeld = true; return; }
+  if (state.tool === 'heal') {
+    if (k === '[') return run(() => heal.resize(1 / 1.2));
+    if (k === ']') return run(() => heal.resize(1.2));
+    if (k === 'delete' || k === 'backspace') return run(() => heal.remove());
+  }
   if (state.tool === 'local') {
     if (k === '[') return run(() => locals.resizeBrush(1 / 1.15));
     if (k === ']') return run(() => locals.resizeBrush(1.15));
@@ -941,6 +1009,7 @@ window.addEventListener('keydown', (e) => {
   if ((k === 'arrowleft' || k === 'arrowright') && !e.target.matches('input')) return run(() => browser.step(k === 'arrowright' ? 1 : -1));
   if (k === '\\') run(() => $('btnBefore').click());
   else if (k === 'r') run(() => $('btnCrop').click());
+  else if (k === 'h') run(() => $('btnHeal').click());
   else if (k === 'j') run(() => $('btnClip').click());
   else if (k === 'f') run(() => $('btnFit').click());
   else if (k === '1') run(() => zoomAt(1));

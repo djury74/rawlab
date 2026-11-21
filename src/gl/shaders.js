@@ -39,23 +39,55 @@ uniform vec2 uSize;        // source size in pixels
 uniform vec3 uDist;        // ptlens a, b, c
 uniform vec2 uTca;         // red and blue magnification
 uniform vec3 uVig;         // k1, k2, k3
+uniform int uSpotN;
+uniform vec4 uSpot[40];    // blemish centre (xy) and source centre (zw), in image uv
+uniform vec2 uSpotR[40];   // radius as a fraction of the long edge, feather
 in vec2 vT;
 out vec4 o;
+
+// Where the lens actually put the point that belongs at corrected position uv.
+vec2 lensOffset(vec2 uv) {
+  vec2 d = (uv - 0.5) * uSize;
+  float ru = length(d) / (0.5 * min(uSize.x, uSize.y));
+  return d * (((uDist.x * ru + uDist.y) * ru + uDist.z) * ru + 1.0 - uDist.x - uDist.y - uDist.z);
+}
+// The photo at corrected position uv, with lens corrections applied.
+vec3 photo(vec2 uv, vec2 gx, vec2 gy) {
+  if (!uLens) return textureGrad(uSrc, uv, gx, gy).rgb;
+  vec2 d = lensOffset(uv);
+  vec3 c = vec3(textureGrad(uSrc, 0.5 + d * uTca.x / uSize, gx, gy).r, textureGrad(uSrc, 0.5 + d / uSize, gx, gy).g, textureGrad(uSrc, 0.5 + d * uTca.y / uSize, gx, gy).b);
+  float r2 = dot(d, d) / (0.25 * dot(uSize, uSize));
+  return c / max(1.0 + r2 * (uVig.x + r2 * (uVig.y + r2 * uVig.z)), 0.25);
+}
+// Average colour just outside a circle, read from a blurred level of the image.
+vec3 surround(vec2 centre, float rpx, float lod) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * 0.7853982;
+    vec2 uv = centre + vec2(cos(a), sin(a)) * rpx * 1.4 / uSize;
+    acc += textureLod(uSrc, uLens ? 0.5 + lensOffset(uv) / uSize : uv, lod).rgb;
+  }
+  return acc / 8.0;
+}
+
 void main() {
   vec2 p = vec2(vT.x, 1.0 - vT.y);
   vec2 uv = uO + p.x * uX + p.y * uY;
+  vec2 gx = dFdx(uv), gy = dFdy(uv);
   vec2 in2 = step(vec2(0.0), uv) * step(uv, vec2(1.0));
-  vec3 c;
-  if (uLens) {
-    // uv is the corrected position; find where the lens actually put that point.
-    vec2 d = (uv - 0.5) * uSize;
-    float ru = length(d) / (0.5 * min(uSize.x, uSize.y));
-    d *= ((uDist.x * ru + uDist.y) * ru + uDist.z) * ru + 1.0 - uDist.x - uDist.y - uDist.z;
-    c = vec3(texture(uSrc, 0.5 + d * uTca.x / uSize).r, texture(uSrc, 0.5 + d / uSize).g, texture(uSrc, 0.5 + d * uTca.y / uSize).b);
-    float r2 = dot(d, d) / (0.25 * dot(uSize, uSize));
-    c /= max(1.0 + r2 * (uVig.x + r2 * (uVig.y + r2 * uVig.z)), 0.25);
-  } else {
-    c = texture(uSrc, uv).rgb;
+  vec3 c = photo(uv, gx, gy);
+  // Spot removal: cover each blemish with its source patch, scaled so the
+  // patch's surroundings match the blemish's surroundings in brightness and colour.
+  for (int i = 0; i < 40; i++) {
+    if (i >= uSpotN) break;
+    float rpx = uSpotR[i].x * max(uSize.x, uSize.y);
+    float d = length((uv - uSpot[i].xy) * uSize) / rpx;
+    if (d < 1.0) {
+      float lod = max(0.0, log2(rpx * 0.5));
+      vec3 match = clamp(surround(uSpot[i].xy, rpx, lod) / max(surround(uSpot[i].zw, rpx, lod), 1e-5), 0.5, 2.0);
+      vec3 cover = photo(uv + uSpot[i].zw - uSpot[i].xy, gx, gy) * match;
+      c = mix(c, cover, 1.0 - smoothstep(1.0 - uSpotR[i].y, 1.0, d));
+    }
   }
   o = vec4(c, in2.x * in2.y);
 }`;
