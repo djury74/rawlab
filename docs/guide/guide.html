@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Duncan's Photo Lab: a guide for new users</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #222; margin: 0; }
+  h1 { font-size: 30pt; line-height: 1.1; margin: 0 0 6mm; letter-spacing: -0.01em; }
+  h2 { font-size: 17pt; margin: 0 0 3mm; padding-bottom: 2mm; border-bottom: 2px solid #e3a23a; break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 5mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.2mm; }
+  section { break-before: page; }
+  section.first { break-before: auto; }
+  b.k, kbd { font: 600 9pt/1 "Helvetica Neue", Arial, sans-serif; background: #f0f0f0; border: 1px solid #c9c9c9; border-radius: 3px; padding: 1.5px 5px; white-space: nowrap; }
+  .btn { font-weight: 600; white-space: nowrap; }
+  img { display: block; width: 100%; border: 1px solid #bbb; border-radius: 4px; }
+  figure { margin: 3mm 0 4mm; break-inside: avoid; }
+  figcaption { font-size: 9pt; color: #666; margin-top: 1.5mm; }
+  .cover { display: flex; flex-direction: column; min-height: 250mm; }
+  .cover .mark { width: 22mm; height: 22mm; margin-bottom: 8mm; }
+  .cover .lead { font-size: 13pt; color: #444; max-width: 135mm; }
+  .cover .where { margin-top: 8mm; padding: 5mm 6mm; background: #faf3e3; border-left: 4px solid #e3a23a; border-radius: 3px; }
+  .cover .where a { font-size: 13pt; font-weight: 600; color: #222; text-decoration: none; }
+  .toc { margin-top: auto; columns: 2; column-gap: 10mm; font-size: 10pt; color: #444; padding-top: 6mm; border-top: 1px solid #ddd; }
+  .toc div { break-inside: avoid; margin-bottom: 1.5mm; }
+  .toc b { color: #e3a23a; display: inline-block; width: 6mm; }
+  .cols { display: grid; grid-template-columns: 1fr 58mm; gap: 7mm; align-items: start; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .note { background: #f4f4f4; border-radius: 4px; padding: 3mm 4mm; margin: 3mm 0; break-inside: avoid; }
+  .note b:first-child { color: #9a6508; }
+  .annot { position: relative; }
+  .annot span { position: absolute; width: 6.5mm; height: 6.5mm; margin: -3.25mm 0 0 -3.25mm; border-radius: 50%; background: #e3a23a; color: #1a1305; font: 700 10pt/6.5mm Arial, sans-serif; text-align: center; box-shadow: 0 0 0 1.5px #fff, 0 1px 4px rgba(0,0,0,.5); }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 1mm 8mm; }
+  .legend div { display: grid; grid-template-columns: 7mm 1fr; break-inside: avoid; margin-bottom: 1.5mm; }
+  .legend i { font: 700 9.5pt/5.5mm Arial, sans-serif; font-style: normal; width: 5.5mm; height: 5.5mm; border-radius: 50%; background: #e3a23a; color: #1a1305; text-align: center; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
+  td, th { text-align: left; padding: 1.4mm 2mm; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
+  th { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: #777; }
+  td:first-child { white-space: nowrap; width: 34mm; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 9mm; margin-bottom: 3mm; break-inside: avoid; }
+  .steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 6mm; height: 6mm; border-radius: 50%; background: #222; color: #fff; font: 700 9.5pt/6mm Arial, sans-serif; text-align: center; }
+</style>
+</head>
+<body>
+
+<section class="first cover">
+  <svg class="mark" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#1c1c1c"/><circle cx="32" cy="32" r="19" fill="none" stroke="#e3a23a" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="#e3a23a"/><circle cx="47.5" cy="16.5" r="4" fill="#f4f4f4"/></svg>
+  <h1>Duncan's Photo Lab</h1>
+  <p class="lead">A guide for new users. How to open a photo from your camera, make it look the way you want, and save the result.</p>
+  <div class="where">
+    <p style="margin-bottom:1.5mm">Open the app in Chrome or Edge on a computer:</p>
+    <a href="https://djury74.github.io/rawlab/">https://djury74.github.io/rawlab/</a>
+  </div>
+  <h3 style="margin-top:9mm">Three things to know before you start</h3>
+  <ul>
+    <li><b>Your photos stay on your computer.</b> The app runs in your browser. Nothing is uploaded.</li>
+    <li><b>Your original file is never changed.</b> Every adjustment can be undone, and the camera's file is left exactly as it was. You get a finished picture by exporting a copy.</li>
+    <li><b>It is made for RAW files.</b> These are the unprocessed files a camera can record (NEF from Nikon, CR2 or CR3 from Canon, ARW from Sony, and others). They hold more detail than a JPEG, which is what makes the adjustments in this guide work well. JPEG and PNG files open too.</li>
+  </ul>
+  <div class="toc">
+    <div><b>1</b> Getting started</div>
+    <div><b>2</b> The screen at a glance</div>
+    <div><b>3</b> Your first edit, in five steps</div>
+    <div><b>4</b> Crop, straighten and compare</div>
+    <div><b>5</b> Fixing part of a photo</div>
+    <div><b>6</b> Working through a card of photos</div>
+    <div><b>7</b> Saving your finished photo</div>
+    <div><b>8</b> Where your work is kept, shortcuts and problems</div>
+  </div>
+</section>
+
+<section>
+  <h2>1. Getting started</h2>
+  <p>Go to the address on the front page. There is nothing to download and no account to create.</p>
+  <figure><img src="start.jpg" alt="The start screen"><figcaption>The start screen. Drop a photo anywhere on it, or use one of the buttons.</figcaption></figure>
+  <h3>Opening a photo</h3>
+  <ul>
+    <li><span class="btn">Browse a card or folder…</span> is the best way to work from a camera card. Choose the card, or the folder your photos are in, and every photo appears as a strip of small pictures along the bottom. Click one to open it. The browser will ask permission to read the folder; that is normal.</li>
+    <li><span class="btn">Choose one file…</span> opens a single photo from anywhere on your computer.</li>
+    <li>You can also drag a photo from a folder window and drop it onto the app.</li>
+  </ul>
+  <p>A RAW file takes a few seconds to open, because the app is developing it from the sensor data.</p>
+  <h3>Optional: install it as an app</h3>
+  <p>In Chrome, click the install icon at the right-hand end of the address bar (a small screen with a down arrow). The app then gets its own window and an entry in your Start menu, and you can open RAW files in it straight from a folder by right-clicking a file and choosing <span class="btn">Open with</span>. It still needs an internet connection to start, and it updates itself.</p>
+  <div class="note"><b>Next time.</b> The app remembers the last folder you browsed. The start screen shows a button with its name, so getting back to your card is one click.</div>
+</section>
+
+<section>
+  <h2>2. The screen at a glance</h2>
+  <figure class="annot">
+    <img src="main.jpg" alt="The main screen with a photo open">
+    <span style="left:37%;top:2.6%">1</span>
+    <span style="left:7.6%;top:26%">2</span>
+    <span style="left:44%;top:38%">3</span>
+    <span style="left:90%;top:11%">4</span>
+    <span style="left:77.6%;top:62%">5</span>
+    <span style="left:44%;top:90%">6</span>
+  </figure>
+  <div class="legend">
+    <div><i>1</i><span><b>Top bar.</b> Open photos, undo, the tools (Crop, Heal), ways of viewing, zoom, and Export. The stars next to the file name are the photo's rating.</span></div>
+    <div><i>2</i><span><b>Left panel.</b> Ready-made looks (Presets), the list of everything you have done (History), and buttons for copying a look between photos.</span></div>
+    <div><i>3</i><span><b>Your photo.</b> Scroll the mouse wheel to zoom, and drag to move around when zoomed in. Double-click to jump between the whole photo and full detail.</span></div>
+    <div><i>4</i><span><b>Histogram.</b> A graph of how much of the photo is dark (left) or bright (right). A pile against either edge means detail is being lost there.</span></div>
+    <div><i>5</i><span><b>Adjustment panels.</b> The sliders that change the photo. Click a heading such as Tone curve to open or close that group.</span></div>
+    <div><i>6</i><span><b>Photo strip.</b> The photos in the folder you opened, newest first. An amber dot marks ones you have already edited.</span></div>
+  </div>
+  <div class="note"><b>Two habits worth learning straight away.</b> Double-click the name of any slider to put it back to where it started. And press <kbd>Ctrl</kbd> + <kbd>Z</kbd> to undo your last change, as many times as you like.</div>
+</section>
+
+<section style="font-size:9.8pt; line-height:1.45">
+  <h2>3. Your first edit, in five steps</h2>
+  <p>Everything here is in the <b>Basic</b> panel at the top right. Work from the top down; that order suits most photos.</p>
+  <div class="cols">
+    <ol class="steps">
+      <li><b>Check the brightness.</b> When a RAW photo opens, the app brightens it automatically if it was taken a little dark. The <span class="btn">Brightness</span> buttons show this: <span class="btn">Auto</span> is the brightened version and <span class="btn">As shot</span> is exactly what the camera recorded. Fine-tune with the <span class="btn">Exposure</span> slider.</li>
+      <li><b>Fix the colour of the light.</b> If the photo looks too orange or too blue, change the white balance. Try the <span class="btn">Preset</span> list (Auto, Daylight, Cloudy and so on), or click <span class="btn">Pick</span> and then click something in the photo that should be plain grey or white. <span class="btn">Temp</span> moves between blue and orange; <span class="btn">Tint</span> between green and pink.</li>
+      <li><b>Balance light and dark.</b> <span class="btn">Highlights</span> to the left brings back detail in bright areas such as sky. <span class="btn">Shadows</span> to the right opens up dark areas. <span class="btn">Contrast</span> adds or removes punch. <span class="btn">Whites</span> and <span class="btn">Blacks</span> set the very brightest and darkest points.</li>
+      <li><b>Add some life.</b> <span class="btn">Vibrance</span> strengthens muted colours without overdoing ones that are already strong, so it is the safer choice. <span class="btn">Saturation</span> strengthens everything equally. <span class="btn">Clarity</span> adds crispness to textures.</li>
+      <li><b>Look at what you have done.</b> Press <kbd>\</kbd> to flip between the original and your version, then go on to export (section 7).</li>
+    </ol>
+    <figure style="margin:0"><img src="basic.jpg" alt="The Basic panel"><figcaption>The Basic panel. Sliders you have moved turn amber.</figcaption></figure>
+  </div>
+  <div class="note"><b>In a hurry?</b> Click a preset in the left panel for a finished look in one go, or click <span class="btn">Auto tone</span> beside the Tone heading to let the app set exposure, whites and blacks for you. Both are starting points you can adjust.</div>
+  <h3>The other panels, when you want them</h3>
+  <table>
+    <tr><td><b>Tone curve</b></td><td>Finer control of brightness. Click the line to add a point and drag it up to brighten or down to darken that part of the range.</td></tr>
+    <tr><td><b>Colour mixer</b></td><td>Change one colour at a time: make the blues deeper, the greens less yellow, and so on. With B&amp;W ticked, it sets how light or dark each colour appears.</td></tr>
+    <tr><td><b>Colour grading</b></td><td>Add a colour tint to the shadows and a different one to the highlights, for a warm or cool mood.</td></tr>
+    <tr><td><b>Detail</b></td><td>Sharpening and noise reduction. Zoom to 100% (press <kbd>Z</kbd>) to judge these properly.</td></tr>
+    <tr><td><b>Effects</b></td><td>Darken or lighten the corners (vignette) and add film-like grain.</td></tr>
+    <tr><td><b>Lens corrections</b></td><td>Removes the slight bending and corner darkening a lens adds. Applied automatically when the app recognises the lens.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. Crop, straighten and compare</h2>
+  <h3>Crop and straighten</h3>
+  <p>Click <span class="btn">Crop</span> in the top bar, or press <kbd>R</kbd>.</p>
+  <div class="cols" style="grid-template-columns: 1fr 86mm">
+  <ul>
+    <li><b>Change the frame</b> by dragging its corners or edges. Drag inside it to move it.</li>
+    <li><b>Keep a shape</b> by choosing one from the list at the left of the bar, such as 1 : 1 for a square or 16 : 9 for a widescreen.</li>
+    <li><b>Straighten a tilted photo</b> by clicking <span class="btn">Level</span> and then dragging a line along the horizon, or along something that should be upright such as the edge of a building. The photo turns to match. You can also use the <span class="btn">Angle</span> slider.</li>
+    <li><b>Turn or mirror</b> the photo with the 90° and Flip buttons.</li>
+  </ul>
+  <figure style="margin:0"><img src="crop.jpg" alt="Crop mode"><figcaption>Crop mode. The bright area is what will be kept.</figcaption></figure>
+  </div>
+  <p>Click <span class="btn">Done</span> or press <kbd>Enter</kbd> when you are happy. You can come back and change the crop at any time; nothing is thrown away.</p>
+  <h3>Checking your work</h3>
+  <div class="cols" style="grid-template-columns: 1fr 78mm">
+    <ul>
+      <li><span class="btn">Before</span> (<kbd>\</kbd>) shows the photo as it was, until you press it again.</li>
+      <li><span class="btn">Compare</span> (<kbd>Y</kbd>) shows original and edit side by side. Zooming moves both together.</li>
+      <li><span class="btn">Clipping</span> (<kbd>J</kbd>) paints pure white areas red and pure black areas blue, so you can see where detail has been lost.</li>
+      <li><span class="btn">Panels</span> (<kbd>Tab</kbd>) hides the side panels to give the photo more room.</li>
+      <li><b>History</b>, in the left panel, lists every step. Click any line to go back to that point.</li>
+      <li><span class="btn">Reset</span> returns the photo to how it first opened.</li>
+    </ul>
+    <figure style="margin:0"><img src="compare.jpg" alt="Compare view"><figcaption>Compare: before on the left, after on the right.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>5. Fixing part of a photo</h2>
+  <p>The sliders in section 3 change the whole photo. These two tools change only part of it.</p>
+  <h3>Local adjustments: brighten, darken or recolour one area</h3>
+  <p>Open the <b>Local adjustments</b> panel and choose the shape that fits what you want to change.</p>
+  <div class="cols" style="grid-template-columns: 1fr 86mm">
+  <ul>
+    <li><span class="btn">+ Gradient</span> for a sky or foreground. Drag across the photo: the change is strongest where you start and fades out to where you let go.</li>
+    <li><span class="btn">+ Radial</span> for a face or a single object. Drag to draw an oval, then use its handles to resize it. Tick <span class="btn">Invert</span> to affect everything outside it.</li>
+    <li><span class="btn">+ Brush</span> for an irregular shape. Paint over the area. <kbd>[</kbd> and <kbd>]</kbd> change the brush size, and <span class="btn">Erase</span> removes paint.</li>
+  </ul>
+  <figure style="margin:0"><img src="local.jpg" alt="A radial adjustment"><figcaption>A radial adjustment brightening the bridge. The oval marks the area.</figcaption></figure>
+  </div>
+  <p>Then move the sliders that appear underneath. They affect only that area. Tick <span class="btn">Show mask overlay</span> to see the area in red.</p>
+  <h3>Heal: remove spots and blemishes</h3>
+  <div class="cols" style="grid-template-columns: 1fr 86mm">
+    <div>
+      <p>Click <span class="btn">Heal</span> in the top bar, or press <kbd>H</kbd>. It is made for dust spots in a sky and small marks.</p>
+      <ul>
+        <li><b>Click the spot.</b> The app covers it with a clean patch copied from nearby.</li>
+        <li><b>Make the circle slightly larger than the spot</b>, using the Size slider or <kbd>[</kbd> and <kbd>]</kbd>.</li>
+        <li><b>If the patch looks wrong</b>, drag the dashed circle to somewhere better. That is where it copies from.</li>
+        <li><b>Remove a fix</b> by clicking it and pressing <kbd>Delete</kbd>.</li>
+      </ul>
+    </div>
+    <figure style="margin:0"><img src="heal.jpg" alt="The Heal tool"><figcaption>The solid circle is the fix; the dashed circle is where it copies from.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>6. Working through a card of photos</h2>
+  <p>After a day's shooting you usually want to find the good ones first, then edit only those. The photo strip and star ratings are for that.</p>
+  <ol class="steps">
+    <li><b>Open the card</b> with <span class="btn">Open card or folder…</span>. The newest photos are at the left of the strip.</li>
+    <li><b>Go through them</b> with the <kbd>←</kbd> and <kbd>→</kbd> keys.</li>
+    <li><b>Rate the ones worth keeping</b> by pressing <kbd>1</kbd> to <kbd>5</kbd>. Press <kbd>0</kbd> to clear a rating. The stars appear in the top bar and under the small picture in the strip.</li>
+    <li><b>Show only your picks.</b> Use the list at the right of the strip (it says <span class="btn">All photos</span>) to show, for example, three stars and above.</li>
+    <li><b>Edit the first one.</b></li>
+    <li><b>Reuse the edit on similar photos.</b> Open the next photo taken in the same light and click <span class="btn">Apply previous photo's look</span> in the left panel. The adjustments carry over; crops and spot fixes do not, because those belong to one photo.</li>
+  </ol>
+  <h3>Other ways to reuse a look</h3>
+  <ul>
+    <li><span class="btn">Copy look</span> and <span class="btn">Paste look</span> do the same thing between any two photos, not only the last one.</li>
+    <li><span class="btn">Save current look as preset</span> keeps a look under a name of your choosing. It then appears in the Presets list for any photo.</li>
+  </ul>
+  <div class="note"><b>Working straight from the card?</b> That is fine, but export the photos you want before you format the card. Your edits are remembered against each photo, and once the photo is gone there is nothing to apply them to.</div>
+</section>
+
+<section>
+  <h2>7. Saving your finished photo</h2>
+  <p>Click <span class="btn">Export…</span> at the right of the top bar, or press <kbd>Ctrl</kbd> + <kbd>E</kbd>. This makes a new file. Your original is not touched.</p>
+  <figure><img src="export.jpg" alt="The Export window"><figcaption>The Export window. The picture on the left shows the real result at full detail; drag it to look around.</figcaption></figure>
+  <table>
+    <tr><td><b>Name</b></td><td>What the new file will be called.</td></tr>
+    <tr><td><b>Format</b></td><td><b>JPEG</b> is the normal choice for sharing, printing and websites. <b>PNG</b> and <b>WebP</b> are alternatives. <b>TIFF</b> is a very large, top-quality file for carrying on in another editing program.</td></tr>
+    <tr><td><b>Size</b></td><td>Full size keeps every pixel. Smaller sizes suit email and the web: 2048 pixels on the long edge is a good general choice for sharing.</td></tr>
+    <tr><td><b>Quality</b></td><td>Higher looks better and makes a bigger file. 85 to 92 is right for most uses. The file size shown underneath updates as you move it, and the preview shows whether a lower setting is visibly worse.</td></tr>
+    <tr><td><b>Camera details</b></td><td>Stores the camera, lens and settings inside the file. Untick it if you would rather not share those.</td></tr>
+  </table>
+  <p>Click <span class="btn">Save</span> and choose where to put the file. The app remembers your choices for next time.</p>
+</section>
+
+<section>
+  <h2>8. Where your work is kept, shortcuts and problems</h2>
+  <h3>Where your work is kept</h3>
+  <ul>
+    <li><b>Edits, ratings and presets are saved automatically</b> in the browser on this computer. Reopen a photo and it comes back as you left it.</li>
+    <li><b>They do not move with you.</b> A different computer or a different browser will not have them, and clearing the browser's stored data removes them.</li>
+    <li><b>To keep an edit safely</b>, click <span class="btn">Save sidecar</span> in the left panel. That saves a small file holding every setting, which <span class="btn">Load sidecar</span> can bring back later, on any computer. Or simply export the finished photo.</li>
+  </ul>
+  <div class="two">
+    <div>
+      <h3>Keyboard shortcuts</h3>
+      <table>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Undo (add <kbd>Shift</kbd> to redo)</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>O</kbd></td><td>Open a photo</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>E</kbd></td><td>Export</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous or next photo</td></tr>
+        <tr><td><kbd>0</kbd> to <kbd>5</kbd></td><td>Star rating</td></tr>
+        <tr><td><kbd>\</kbd></td><td>Before and after</td></tr>
+        <tr><td><kbd>Y</kbd></td><td>Compare side by side</td></tr>
+        <tr><td><kbd>Z</kbd></td><td>Whole photo or 100%</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Fit the photo to the window</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Crop</td></tr>
+        <tr><td><kbd>H</kbd></td><td>Heal</td></tr>
+        <tr><td><kbd>W</kbd></td><td>White balance picker</td></tr>
+        <tr><td><kbd>J</kbd></td><td>Show lost highlights and shadows</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Hide or show the side panels</td></tr>
+        <tr><td><kbd>Enter</kbd> or <kbd>Esc</kbd></td><td>Finish the current tool</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>If something goes wrong</h3>
+      <p><b>The photo will not open.</b> Check it is a RAW file from a camera, or a JPEG or PNG. A message at the top of the photo area says what went wrong.</p>
+      <p><b>"Open card or folder" is missing.</b> That feature needs Chrome or Edge. Other browsers can still open one file at a time.</p>
+      <p><b>The card's photos do not appear.</b> Make sure the card is in the reader, then choose <span class="btn">Change folder</span> in the strip and pick it again.</p>
+      <p><b>The photo looks too bright or too dark when it opens.</b> Click <span class="btn">As shot</span> or <span class="btn">Auto</span> under Tone, then adjust Exposure.</p>
+      <p><b>I have made a mess of it.</b> Press <kbd>Ctrl</kbd> + <kbd>Z</kbd> to step back, click an earlier line in History, or click <span class="btn">Reset</span> to start again. Your original file is always safe.</p>
+      <p><b>The app looks out of date.</b> Press <kbd>Ctrl</kbd> + <kbd>F5</kbd> to load the newest version.</p>
+      <p><b>Sliders feel slow.</b> Close other heavy tabs. The app uses your computer's graphics hardware, so an older machine will be slower with large photos.</p>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

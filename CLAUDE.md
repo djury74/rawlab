@@ -68,6 +68,13 @@ and file layout. This file records what is not obvious from the code.
 - Export is rendered in tiles. After changing the pipeline, compare a tiled
   export against a direct render across a tile boundary.
 
+## User guide
+
+`public/Duncans-Photo-Lab-Guide.pdf` is a guide for new users, published with
+the site. Its source is `docs/guide/guide.html` with screenshots alongside;
+regenerate the PDF with `node docs/guide/make-pdf.cjs` (uses Playwright).
+Update the guide and retake screenshots when features or the layout change.
+
 ## Not yet verified on the owner's machine
 
 Installing as an app and opening NEF files from File Explorer, the folder
