@@ -202,7 +202,7 @@ export class Renderer {
    *  w, h    target size
    *  dest    'canvas' or 'buffer' (RGBA8, read back with readPixels)
    */
-  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null, lens = null }) {
+  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null, lens = null, x = 0 }) {
     if (!this.src) return;
     const gl = this.gl;
     const px = 1 / Math.hypot(af.U[0], af.U[1]);
@@ -235,6 +235,7 @@ export class Renderer {
       return rgb.map((v) => (v - l) * (sat / 100) * 0.35);
     };
     this.#draw(this.progs.develop, target, w, h, { uView: view.tex, uBlur: blur.tex, uCurve: this.curveTex, uBase: this.baseTex }, (gl, u) => {
+      if (!target && x) gl.viewport(x, 0, w, h);          // draw into part of the canvas (side-by-side view)
       gl.uniform2f(u.uTexel, 1 / w, 1 / h);
       gl.uniform1f(u.uPx, px);
       this.#affineUniforms(gl, u, ['uFO', 'uFX', 'uFY'], af, w, h, (p) => [p[0] / g.Wf, p[1] / g.Hf]);

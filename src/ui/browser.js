@@ -34,14 +34,16 @@ async function listPhotos(dir, depth = 0, out = []) {
   return out;
 }
 
-export function initBrowser({ node, openFile, toast, hasEdits }) {
+export function initBrowser({ node, openFile, toast, hasEdits, rating }) {
   const supported = !!window.showDirectoryPicker;
   let items = [];                        // { name, getFile, file?, li, img }
-  let current = null, decoder = null, queue = Promise.resolve(), generation = 0;
+  let current = null, decoder = null, queue = Promise.resolve(), generation = 0, minRating = 0, label = '';
 
   const title = el('span', { class: 'strip-title' });
   const list = el('ul', { class: 'strip-list' });
-  node.append(el('div', { class: 'strip-head' }, title,
+  const filter = el('select', { 'aria-label': 'Show photos rated', onchange: () => { minRating = +filter.value; applyFilter(); } },
+    el('option', { value: 0 }, 'All photos'), [1, 2, 3, 4, 5].map((n) => el('option', { value: n }, '★'.repeat(n) + (n < 5 ? ' and up' : ''))));
+  node.append(el('div', { class: 'strip-head' }, title, filter,
     supported ? el('button', { class: 'link', type: 'button', onclick: () => pickFolder() }, 'Change folder') : null,
     el('button', { class: 'link', type: 'button', title: 'Hide the photo strip', 'aria-label': 'Hide the photo strip', onclick: () => { node.hidden = true; } }, '×')), list);
 
@@ -85,12 +87,26 @@ export function initBrowser({ node, openFile, toast, hasEdits }) {
     }
   }
 
+  // Show each photo's stars and hide those below the chosen rating.
+  function applyFilter() {
+    let shown = 0;
+    for (const i of items) {
+      const r = rating(i.file);
+      i.stars.textContent = '★'.repeat(r);
+      i.li.hidden = r < minRating;
+      if (!i.li.hidden) shown++;
+    }
+    const n = items.length;
+    title.textContent = `${label}  ·  ${minRating ? `${shown} of ${n}` : n} photo${n === 1 ? '' : 's'}, newest first`;
+  }
+
   function markCurrent() {
     for (const i of items) i.li.classList.toggle('current', !!current && i.name === current.name && (!i.file || i.file.size === current.size));
   }
 
   // Show a set of photos. Each entry needs `name` and `getFile()`.
-  async function show(entries, label) {
+  async function show(entries, name) {
+    label = name;
     generation++;
     observer.disconnect();
     const withTime = await Promise.all(entries.map(async (e) => {
@@ -102,10 +118,11 @@ export function initBrowser({ node, openFile, toast, hasEdits }) {
       const open = async () => {
         try { item.file = await item.getFile(); openFile(item.file); } catch { toast('That photo can no longer be read. Is the card still inserted?', true); }
       };
-      item.li = el('li', {}, el('button', { type: 'button', title: item.name, onclick: open }, item.img, el('span', { class: 'cap' }, item.name)));
+      item.stars = el('span', { class: 'rate' });
+      item.li = el('li', {}, el('button', { type: 'button', title: item.name, onclick: open }, item.img, item.stars, el('span', { class: 'cap' }, item.name)));
       return item.li;
     }));
-    title.textContent = `${label}  ·  ${items.length} photo${items.length === 1 ? '' : 's'}, newest first`;
+    applyFilter();
     node.hidden = false;
     list.scrollLeft = 0;
     for (const i of items) observer.observe(i.li);
@@ -145,10 +162,12 @@ export function initBrowser({ node, openFile, toast, hasEdits }) {
     supported, pickFolder, reopen, show,
     rememberedName: async () => (await remembered())?.name || null,
     setCurrent: (file) => { current = file; markCurrent(); },
+    refreshRatings: applyFilter,
     refreshEdited: () => { for (const i of items) if (i.file) i.li.classList.toggle('edited', hasEdits(i.file)); },
     step: (d) => {                      // open the next or previous photo in the strip
-      const at = items.findIndex((i) => i.li.classList.contains('current'));
-      const next = items[at + d];
+      const visible = items.filter((i) => !i.li.hidden || i.li.classList.contains('current'));
+      const at = visible.findIndex((i) => i.li.classList.contains('current'));
+      const next = visible[at + d];
       if (at >= 0 && next) { next.li.scrollIntoView({ inline: 'nearest', block: 'nearest' }); next.li.querySelector('button').click(); }
     },
   };

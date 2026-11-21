@@ -24,6 +24,7 @@ const state = {
   tool: 'none',          // none | crop | wb | local
   selLocal: null,        // id of the selected local adjustment
   showBefore: false,
+  compare: false,        // before and after, side by side
   clip: false,
   history: [], hIndex: -1,
   af: null, g: null,     // last view mapping, in device pixels
@@ -55,6 +56,35 @@ function busy(text) { $('busy').hidden = !text; if (text) $('busyText').textCont
 
 const editKey = (src) => `rawlab:edit:${src.name}:${src.size}`;
 
+// Star rating (0 to 5) for a photo, kept in this browser.
+const ratingKey = (f) => `rawlab:rating:${f.name}:${f.size}`;
+const getRating = (f) => { try { return +localStorage.getItem(ratingKey(f)) || 0; } catch { return 0; } };
+function setRating(n) {
+  if (!state.source) return;
+  const r = getRating(state.source) === n ? 0 : n;      // choosing the same rating again clears it
+  try { r ? localStorage.setItem(ratingKey(state.source), r) : localStorage.removeItem(ratingKey(state.source)); } catch { /* not essential */ }
+  refreshStars(); browser.refreshRatings();
+}
+function refreshStars() {
+  const r = state.source ? getRating(state.source) : 0;
+  $('stars').hidden = !state.source;
+  [...$('stars').children].forEach((b, i) => { b.classList.toggle('lit', i < r); b.setAttribute('aria-pressed', i < r); });
+}
+$('stars').append(...[1, 2, 3, 4, 5].map((n) => el('button', { type: 'button', title: `${n} star${n > 1 ? 's' : ''} (press ${n}; 0 clears)`, 'aria-label': `${n} star${n > 1 ? 's' : ''}`, onclick: () => setRating(n) }, '★')));
+
+// The look of the last photo edited before this one, for the Previous button.
+function previousLook() {
+  if (!state.source) return null;
+  try {
+    const key = editKey(state.source);
+    for (const slot of ['rawlab:last', 'rawlab:prev']) {
+      const v = JSON.parse(localStorage.getItem(slot) || 'null');
+      if (v && v.key !== key) return v;
+    }
+  } catch { /* nothing stored */ }
+  return null;
+}
+
 // Starting point for a photo: defaults, plus automatic exposure for RAW files.
 // Rendered images (JPEG, PNG) already carry a tone curve, so they start flat.
 function freshSettings() {
@@ -78,13 +108,14 @@ async function openFile(file) {
       restored = saved?.version >= 2;
       state.settings = restored ? normalise(saved) : freshSettings();
     } catch { state.settings = freshSettings(); }
-    state.history = []; state.hIndex = -1;
+    state.history = []; state.hIndex = -1; state.restored = restored;
     state.view = { fit: true, zoom: 1, pan: [0, 0] };
     state.selLocal = null;
     setTool('none');
     commit(restored ? 'Open (previous edits restored)' : 'Open');
     $('empty').hidden = true;
     browser.setCurrent(source);
+    refreshStars();
     $('fileName').textContent = `${source.name}  ·  ${source.width} × ${source.height}`;
     const i = source.info;
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
@@ -108,6 +139,7 @@ for (const id of ['btnOpen', 'btnOpen2']) $(id).addEventListener('click', () => 
 const browser = initBrowser({
   node: $('strip'), openFile, toast,
   hasEdits: (file) => { try { return !!localStorage.getItem(editKey(file)); } catch { return false; } },
+  rating: getRating,
 });
 // The top bar button goes straight back to the remembered folder when there is one.
 $('btnFolder').addEventListener('click', () => browser.reopen());
@@ -186,9 +218,21 @@ function render() {
   if (!src) return;
   const s = state.showBefore ? beforeSettings() : state.settings;
   const g = geometry(state.settings, src.width, src.height);
+  locals.syncMasks();
+  if (state.compare) {
+    // Two half-width views of the same area: original on the left, edit on the right.
+    const hw = Math.floor(w / 2), b = beforeSettings();
+    const af = currentAffine(g, hw, h);
+    state.g = g; state.af = af;
+    renderer.render({ settings: b, wb: whiteBalance(b), g, af, w: hw, h, maskCrop: true, bg: BG, lens: lensNow() });
+    renderer.render({ settings: state.settings, wb: whiteBalance(state.settings), g, af, w: hw, h, x: w - hw, clip: state.clip, maskCrop: true, bg: BG, lens: lensNow() });
+    drawOverlay();
+    $('zoomLabel').textContent = Math.round(state.view.shown * 100) + '%';
+    scheduleHistogram();
+    return;
+  }
   const af = currentAffine(g, w, h);
   state.g = g; state.af = af;
-  locals.syncMasks();
   renderer.render({ settings: s, wb: whiteBalance(s), g, af, w, h, clip: state.clip && !state.showBefore, maskCrop: state.tool !== 'crop', bg: BG, showMask: state.showBefore ? null : locals.shownMask(), lens: lensNow() });
   drawOverlay();
   $('zoomLabel').textContent = Math.round(state.view.shown * 100) + '%';
@@ -237,7 +281,15 @@ function restore(index) {
 
 function persist() {
   if (!state.source) return;
-  try { localStorage.setItem(editKey(state.source), JSON.stringify(state.settings)); } catch { /* storage full or blocked */ }
+  try {
+    const key = editKey(state.source);
+    localStorage.setItem(key, JSON.stringify(state.settings));
+    if (state.hIndex > 0 || state.restored) {           // only photos that were really edited count as "previous"
+      const last = JSON.parse(localStorage.getItem('rawlab:last') || 'null');
+      if (last && last.key !== key) localStorage.setItem('rawlab:prev', JSON.stringify(last));
+      localStorage.setItem('rawlab:last', JSON.stringify({ key, name: state.source.name, look: lookOnly(state.settings) }));
+    }
+  } catch { /* storage full or blocked */ }
   browser.refreshEdited();
 }
 
@@ -256,6 +308,12 @@ function updateButtons() {
   $('btnCrop').classList.toggle('on', state.tool === 'crop');
   $('btnHeal').classList.toggle('on', state.tool === 'heal');
   $('btnBefore').classList.toggle('on', state.showBefore);
+  $('btnCompare').classList.toggle('on', state.compare);
+  $('btnCompare').disabled = !has;
+  $('btnPanels').classList.toggle('on', $('app').classList.contains('solo'));
+  const prev = previousLook();
+  $('btnPrevious').disabled = !has || !prev;
+  $('btnPrevious').title = prev ? `Apply the look last used on ${prev.name}` : 'Edit another photo first';
   $('btnClip').classList.toggle('on', state.clip);
   $('btnFit').classList.toggle('on', state.view.fit);
   $('beforeTag').hidden = !state.showBefore;
@@ -636,8 +694,24 @@ const angleSlider = slider({
   onInput: requestRender, onCommit: () => { angleBase = null; commit('Straighten'); },
 });
 cropControls.push(angleSlider, { refresh: () => { aspectSelect.value = state.settings.crop.aspect; } });
+// Straighten by drawing a line along something that should be level or upright.
+let levelMode = false;
+const levelBtn = el('button', { type: 'button', title: 'Drag a line along the horizon or a vertical edge (or hold Ctrl and drag)', onclick: () => {
+  levelMode = !levelMode; levelBtn.classList.toggle('on', levelMode); overlay.style.cursor = levelMode ? 'crosshair' : 'default';
+} }, 'Level');
+function applyLevel(a, b) {
+  if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 24 * devicePixelRatio) return;
+  // The view is already rotated by the current angle, so the line's tilt is what is left to correct.
+  const tilt = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+  const delta = tilt - 90 * Math.round(tilt / 90);      // to the nearer of horizontal and vertical
+  const angle = Math.max(-45, Math.min(45, Math.round((state.settings.crop.angle + delta) * 10) / 10));
+  angleBase = null; setAngle(angle); angleBase = null;
+  levelMode = false;
+  refreshAll(); commit('Straighten');
+}
+
 $('cropbar').append(
-  aspectSelect, angleSlider.node,
+  aspectSelect, angleSlider.node, levelBtn,
   el('button', { type: 'button', title: 'Rotate left', onclick: () => rotate90(-1) }, '⟲ 90°'),
   el('button', { type: 'button', title: 'Rotate right', onclick: () => rotate90(1) }, '⟳ 90°'),
   el('button', { type: 'button', onclick: () => flip('h') }, 'Flip H'),
@@ -653,6 +727,9 @@ function setTool(tool) {
   if (tool !== 'none' && !state.source) return;
   state.tool = tool;
   if (tool === 'crop') state.showBefore = false;
+  if (tool !== 'none') state.compare = false;
+  if (tool !== 'crop') levelMode = false;
+  levelBtn.classList.toggle('on', levelMode);
   $('cropbar').hidden = tool !== 'crop';
   $('healbar').hidden = tool !== 'heal';
   if (tool !== 'heal') heal.deselect();
@@ -687,6 +764,23 @@ function drawOverlay() {
     octx.setTransform(d, 0, 0, d, 0, 0);
     drawCrop(octx, overlay.width / d, overlay.height / d, { x0: r.x0 / d, y0: r.y0 / d, x1: r.x1 / d, y1: r.y1 / d });
   }
+  if (drag?.type === 'level') {
+    octx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const [w, col] of [[4, 'rgba(0,0,0,0.5)'], [1.5, '#e3a23a']]) {
+      octx.lineWidth = w * devicePixelRatio; octx.strokeStyle = col;
+      octx.beginPath(); octx.moveTo(...drag.start); octx.lineTo(...drag.end); octx.stroke();
+    }
+  }
+  if (state.compare) {
+    const d = devicePixelRatio, mid = Math.floor(overlay.width / 2);
+    octx.fillStyle = '#000'; octx.fillRect(mid - d, 0, 2 * d, overlay.height);
+    octx.font = `600 ${12 * d}px system-ui, sans-serif`; octx.textBaseline = 'top';
+    for (const [text, x] of [['Before', 12 * d], ['After', mid + 12 * d]]) {
+      const tw = octx.measureText(text).width;
+      octx.fillStyle = 'rgba(0,0,0,0.7)'; octx.fillRect(x - 6 * d, 8 * d, tw + 12 * d, 22 * d);
+      octx.fillStyle = '#e6e6e6'; octx.fillText(text, x, 13 * d);
+    }
+  }
   if (state.tool === 'heal' && state.af && !state.showBefore) heal.draw(octx);
   if (state.tool === 'local' && state.af && !state.showBefore) {
     locals.draw(octx);
@@ -698,8 +792,12 @@ function drawOverlay() {
 
 const devicePoint = (e) => {
   const r = overlay.getBoundingClientRect();
-  return [(e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio];
+  const p = [(e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio];
+  const half = canvas.width - Math.floor(canvas.width / 2);
+  if (state.compare && p[0] >= half) p[0] -= half;     // both halves show the same area
+  return p;
 };
+const viewWidth = () => (state.compare ? Math.floor(canvas.width / 2) : canvas.width);
 let drag = null, spaceHeld = false;
 
 overlay.addEventListener('pointerdown', (e) => {
@@ -718,6 +816,11 @@ overlay.addEventListener('pointerdown', (e) => {
     requestRender();
     return;
   }
+  if (state.tool === 'crop' && (levelMode || e.ctrlKey)) {
+    drag = { type: 'level', start: p, end: p };
+    overlay.setPointerCapture(e.pointerId);
+    return;
+  }
   if (state.tool === 'crop') {
     const rect = cropRectOnScreen();
     const handle = hitTest(rect, p[0], p[1], 14 * devicePixelRatio);
@@ -732,6 +835,7 @@ overlay.addEventListener('pointerdown', (e) => {
 
 overlay.addEventListener('pointermove', (e) => {
   const p = devicePoint(e);
+  if (drag?.type === 'level') { drag.end = p; drawOverlay(); return; }
   if (state.tool === 'heal') {
     heal.pointerMove(p);
     if (drag?.type === 'heal') { requestRender(); return; }
@@ -771,6 +875,7 @@ overlay.addEventListener('pointermove', (e) => {
 
 const endDrag = () => {
   if (!drag) return;
+  if (drag.type === 'level') { const d = drag; drag = null; applyLevel(d.start, d.end); overlay.style.cursor = 'default'; requestRender(); return; }
   if (drag.type === 'crop') commit('Crop');
   const wasLocal = drag.type === 'local', wasHeal = drag.type === 'heal';
   drag = null;
@@ -794,10 +899,10 @@ overlay.addEventListener('dblclick', (e) => {
 
 function zoomAt(z, point) {
   const v = state.view, g = state.g;
-  const fit = fitZoom(g, canvas.width, canvas.height);
+  const fit = fitZoom(g, viewWidth(), canvas.height);
   z = Math.min(8, z);
   if (z <= fit * 1.001 && fit <= 8) { v.fit = true; updateButtons(); requestRender(); return; }
-  const c = [canvas.width / 2, canvas.height / 2];
+  const c = [viewWidth() / 2, canvas.height / 2];
   const pt = point || c, old = v.shown;
   v.pan = [v.pan[0] + (pt[0] - c[0]) * (1 / old - 1 / z), v.pan[1] + (pt[1] - c[1]) * (1 / old - 1 / z)];
   v.zoom = z; v.fit = false;
@@ -981,7 +1086,20 @@ $('btnRedo').addEventListener('click', () => restore(state.hIndex + 1));
 $('btnReset').addEventListener('click', () => { state.settings = freshSettings(); state.view.fit = true; refreshAll(); commit('Reset all'); });
 $('btnCrop').addEventListener('click', () => setTool(state.tool === 'crop' ? 'none' : 'crop'));
 $('btnHeal').addEventListener('click', () => setTool(state.tool === 'heal' ? 'none' : 'heal'));
-$('btnBefore').addEventListener('click', () => { state.showBefore = !state.showBefore; updateButtons(); requestRender(); });
+$('btnBefore').addEventListener('click', () => { state.showBefore = !state.showBefore; state.compare = false; updateButtons(); requestRender(); });
+$('btnCompare').addEventListener('click', () => {
+  if (!state.source) return;
+  if (!state.compare) setTool('none');
+  state.compare = !state.compare; state.showBefore = false;
+  updateButtons(); requestRender();
+});
+$('btnPanels').addEventListener('click', () => { $('app').classList.toggle('solo'); updateButtons(); });
+$('btnPrevious').addEventListener('click', () => {
+  const prev = previousLook();
+  if (!prev) return;
+  state.settings = applyLook(state.settings, prev.look);
+  refreshAll(); commit(`Previous look (${prev.name})`);
+});
 $('btnClip').addEventListener('click', () => { state.clip = !state.clip; updateButtons(); requestRender(); });
 $('btnFit').addEventListener('click', () => { state.view.fit = true; updateButtons(); requestRender(); });
 $('btn100').addEventListener('click', () => zoomAt(1));
@@ -994,6 +1112,7 @@ window.addEventListener('keydown', (e) => {
   if (mod && k === 'y') return run(() => restore(state.hIndex + 1));
   if (mod && k === 'o') return run(() => $('fileInput').click());
   if (mod && k === 'e') return run(() => $('btnExport').click());
+  if (e.key === 'Tab' && !mod && !e.altKey && !e.shiftKey) return run(() => $('btnPanels').click());
   if (mod || e.altKey || !state.source) return;
   if (e.key === ' ' && !e.target.matches('button, summary, input')) { e.preventDefault(); spaceHeld = true; return; }
   if (state.tool === 'heal') {
@@ -1012,7 +1131,9 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'h') run(() => $('btnHeal').click());
   else if (k === 'j') run(() => $('btnClip').click());
   else if (k === 'f') run(() => $('btnFit').click());
-  else if (k === '1') run(() => zoomAt(1));
+  else if (k === 'z') run(() => (state.view.fit ? zoomAt(1) : $('btnFit').click()));
+  else if (k === 'y') run(() => $('btnCompare').click());
+  else if (k >= '0' && k <= '5' && k.length === 1) run(() => setRating(+k));
   else if (k === 'w') run(() => setTool(state.tool === 'wb' ? 'none' : 'wb'));
   else if ((k === 'enter' || k === 'escape') && state.tool !== 'none') run(() => setTool('none'));
 });

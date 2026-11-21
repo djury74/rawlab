@@ -26,7 +26,7 @@ button.wide { width: 100%; margin-top: 8px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 #topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid #000; }
-.brand { font-size: 14px; letter-spacing: 0.04em; margin-right: 4px; }
+.brand { font-size: 14px; letter-spacing: 0.04em; margin-right: 4px; white-space: nowrap; }
 .filename { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .spacer { flex: 1; }
 .group { display: flex; align-items: center; }
@@ -136,3 +136,12 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 .strip-list .cap { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip-list li.edited .cap::before { content: "● "; color: var(--accent); }
 .start { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 4px; }
+
+#app.solo { grid-template-columns: 0 minmax(0, 1fr) 0; }
+#app.solo #left, #app.solo #right { display: none; }
+.stars { display: flex; flex: none; }
+.stars button { background: none; border: 0; padding: 0 1px; min-height: 0; font-size: 15px; line-height: 1; color: #555; }
+.stars button.lit { color: var(--accent); }
+.stars button:hover { background: none; color: #f0b352; }
+.strip-list .rate { font-size: 10px; line-height: 1; color: var(--accent); height: 10px; letter-spacing: 1px; }
+.strip-head select { min-height: 0; padding: 1px 6px; font-size: 12px; }

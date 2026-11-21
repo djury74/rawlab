@@ -16,6 +16,7 @@
     <button id="btnOpen" class="primary" title="Open one photo (Ctrl+O)">Open…</button>
     <button id="btnFolder" title="Browse a folder or camera card">Open card or folder…</button>
     <span id="fileName" class="filename"></span>
+    <span id="stars" class="stars" role="group" aria-label="Rating" hidden></span>
     <span class="spacer"></span>
     <div class="group" role="group" aria-label="History">
       <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
@@ -26,11 +27,13 @@
       <button id="btnCrop" title="Crop and straighten (R)">Crop</button>
       <button id="btnHeal" title="Remove spots and blemishes (H)">Heal</button>
       <button id="btnBefore" title="Show the unedited image (\)">Before</button>
+      <button id="btnCompare" title="Before and after, side by side (Y)">Compare</button>
       <button id="btnClip" title="Show clipped highlights and shadows (J)">Clipping</button>
+      <button id="btnPanels" title="Hide or show the side panels (Tab)">Panels</button>
     </div>
     <div class="group" role="group" aria-label="Zoom">
       <button id="btnFit" title="Fit to window (F)">Fit</button>
-      <button id="btn100" title="Actual pixels (1)">100%</button>
+      <button id="btn100" title="Actual pixels (Z switches between this and Fit)">100%</button>
       <span id="zoomLabel" class="zoom"></span>
     </div>
     <button id="btnExport" class="primary" title="Export (Ctrl+E)">Export…</button>
@@ -53,6 +56,7 @@
       <div class="body buttons">
         <button id="btnCopy" title="Copy the look (not the crop) to paste onto another photo">Copy look</button>
         <button id="btnPaste">Paste look</button>
+        <button id="btnPrevious" style="grid-column: 1 / -1">Apply previous photo's look</button>
         <button id="btnSaveJson" title="Save every setting as a sidecar .json file">Save sidecar</button>
         <button id="btnLoadJson">Load sidecar</button>
       </div>
