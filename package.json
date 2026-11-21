@@ -1,0 +1,19 @@
+{
+  "name": "rawlab",
+  "version": "1.0.0",
+  "description": "Browser-based RAW photo developer",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "libraw-wasm-nothread": "^1.6.0-nothread.1",
+    "vite": "^8.3.8"
+  },
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RawLab</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <strong class="brand">RawLab</strong>
+    <button id="btnOpen" class="primary">Open…</button>
+    <span id="fileName" class="filename"></span>
+    <span class="spacer"></span>
+    <div class="group" role="group" aria-label="History">
+      <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="btnRedo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <button id="btnReset" title="Reset all adjustments">Reset</button>
+    </div>
+    <div class="group" role="group" aria-label="View">
+      <button id="btnCrop" title="Crop and straighten (R)">Crop</button>
+      <button id="btnBefore" title="Show the unedited image (\)">Before</button>
+      <button id="btnClip" title="Show clipped highlights and shadows (J)">Clipping</button>
+    </div>
+    <div class="group" role="group" aria-label="Zoom">
+      <button id="btnFit" title="Fit to window (F)">Fit</button>
+      <button id="btn100" title="Actual pixels (1)">100%</button>
+      <span id="zoomLabel" class="zoom"></span>
+    </div>
+    <button id="btnExport" class="primary" title="Export (Ctrl+E)">Export…</button>
+  </header>
+
+  <aside id="left">
+    <details class="section" open>
+      <summary>Presets</summary>
+      <div class="body">
+        <ul id="presets" class="list"></ul>
+        <button id="btnSavePreset" class="wide">Save current look as preset</button>
+      </div>
+    </details>
+    <details class="section" open>
+      <summary>History</summary>
+      <div class="body"><ul id="history" class="list"></ul></div>
+    </details>
+    <details class="section" open>
+      <summary>Settings</summary>
+      <div class="body buttons">
+        <button id="btnCopy" title="Copy the look (not the crop) to paste onto another photo">Copy look</button>
+        <button id="btnPaste">Paste look</button>
+        <button id="btnSaveJson" title="Save every setting as a sidecar .json file">Save sidecar</button>
+        <button id="btnLoadJson">Load sidecar</button>
+      </div>
+    </details>
+  </aside>
+
+  <main id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="empty">
+      <h1>Open a photo to start</h1>
+      <p>Drop a RAW file here (NEF, CR2, CR3, ARW, RAF, DNG and others) or a JPEG or PNG.</p>
+      <button id="btnOpen2" class="primary big">Choose a file…</button>
+      <p class="fine">Files are decoded and edited on this computer. Nothing is uploaded.</p>
+    </div>
+    <div id="busy" hidden><div class="spinner"></div><span id="busyText">Decoding…</span></div>
+    <div id="cropbar" hidden></div>
+    <div id="beforeTag" hidden>Before</div>
+    <div id="toast" hidden role="status"></div>
+  </main>
+
+  <aside id="right">
+    <canvas id="hist" width="512" height="200" aria-label="Histogram"></canvas>
+    <div id="exif"></div>
+    <div id="panels"></div>
+  </aside>
+</div>
+
+<dialog id="exportDlg">
+  <form method="dialog">
+    <h2>Export</h2>
+    <label>Format
+      <select id="exFormat">
+        <option value="image/jpeg">JPEG</option>
+        <option value="image/png">PNG (lossless)</option>
+        <option value="image/webp">WebP</option>
+      </select>
+    </label>
+    <label id="exQualityRow">Quality <output id="exQualityOut">92</output>
+      <input id="exQuality" type="range" min="50" max="100" value="92">
+    </label>
+    <label>Long edge (px)
+      <input id="exEdge" type="number" min="64" step="1" placeholder="Full size">
+    </label>
+    <p id="exInfo" class="fine"></p>
+    <div class="actions">
+      <button value="cancel" type="submit">Cancel</button>
+      <button id="exGo" class="primary" type="button">Export</button>
+    </div>
+  </form>
+</dialog>
+<input id="fileInput" type="file" hidden>
+<input id="jsonInput" type="file" accept=".json,application/json" hidden>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
