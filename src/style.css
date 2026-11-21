@@ -100,7 +100,7 @@ button.big { padding: 8px 18px; font-size: 14px; }
 #toast { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: #2f2f2f; border: 1px solid #4a4a4a; padding: 8px 14px; border-radius: 6px; max-width: 80%; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
 #toast.error { border-color: #b3473d; }
 
-dialog { background: var(--panel); color: var(--text); border: 1px solid #444; border-radius: 8px; padding: 18px 20px; width: 340px; }
+dialog { background: var(--panel); color: var(--text); border: 1px solid #444; border-radius: 8px; padding: 18px 20px; width: min(900px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(0,0,0,0.6); }
 dialog h2 { margin: 0 0 12px; font-size: 16px; }
 dialog label { display: grid; gap: 4px; margin-bottom: 12px; color: var(--muted); }
@@ -111,3 +111,13 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 .list li input[type=checkbox] { flex: none; margin: 0 2px 0 4px; align-self: center; }
 .row > button { flex: 1; }
 .row > select + button, .row > select ~ label { flex: none; }
+
+.export { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
+.export .pane canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 4px; cursor: grab; touch-action: none; }
+.export .opts { display: flex; flex-direction: column; }
+.export .dims { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.export input[type=number], .export input[type=text], .export select { width: 100%; }
+.export label.check { display: flex; grid-template-columns: none; color: var(--text); }
+.export .info { color: var(--text); font-variant-numeric: tabular-nums; margin: 4px 0 0; min-height: 2.8em; }
+.export .actions { margin-top: auto; padding-top: 12px; }
+@media (max-width: 720px) { .export { grid-template-columns: 1fr; } }

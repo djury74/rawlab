@@ -139,6 +139,7 @@ uniform float uGradeBal;
 uniform float uSharpen, uSharpRadius;
 uniform float uVig, uVigMid, uVigFeather, uGrain, uGrainSize;
 uniform vec3 uBg;
+uniform float uDither;
 // Local adjustments. Masks live in source-image space so they follow the photo
 // through crop, rotation and flips.
 uniform vec2 uSO, uSX, uSY, uSrcSize;
@@ -357,7 +358,7 @@ void main() {
     else if (clipLo) v = vec3(0.1, 0.35, 1.0);
   }
   v = mix(v, vec3(1.0, 0.16, 0.1), shown * 0.55);
-  v += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+  v += (hash(gl_FragCoord.xy) - 0.5) / 255.0 * uDither;
   float a = src.a;
   if (uMaskCrop) { vec2 m = step(vec2(0.0), cuv) * step(cuv, vec2(1.0)); a *= m.x * m.y; }
   o = vec4(mix(uBg, v, a), a);

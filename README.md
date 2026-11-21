@@ -53,5 +53,5 @@ CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 
 ## Not built yet
 
-Healing, lens profiles beyond the one above, 16-bit TIFF export, embedded
-colour profiles other than sRGB, and a multi-image library.
+Healing, lens profiles beyond the one above, embedded colour profiles other
+than sRGB, and a multi-image library.

@@ -224,7 +224,9 @@ export class Renderer {
       view = out;
     }
 
-    const target = dest === 'buffer' ? this.#target(slot + ':out', w, h, 'rgba8').tex : null;
+    // 'buffer' is 8-bit for normal export; 'float' keeps full precision for 16-bit files.
+    const target = dest === 'buffer' ? this.#target(slot + ':out', w, h, 'rgba8').tex
+      : dest === 'float' ? this.#target(slot + ':outf', w, h).tex : null;
     const tint = (hue, sat) => {
       const rgb = hsvToRgb(hue, 1, 1);
       const l = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
@@ -259,6 +261,7 @@ export class Renderer {
       gl.uniform1f(u.uGrain, s.grain / 100);
       gl.uniform1f(u.uGrainSize, 1 + (s.grainSize / 100) * 3);
       gl.uniform3fv(u.uBg, bg);
+      gl.uniform1f(u.uDither, dest === 'float' ? 0 : 1);
       this.#localUniforms(gl, u, s, showMask);
       this.#affineUniforms(gl, u, ['uSO', 'uSX', 'uSY'], af, w, h, g.frameToSrc);
       gl.uniform2f(u.uSrcSize, this.src.w, this.src.h);
@@ -304,6 +307,22 @@ export class Renderer {
   release(slot) {
     for (const [name, t] of this.targets) {
       if (name.startsWith(slot + ':')) { this.gl.deleteTexture(t.tex); this.targets.delete(name); }
+    }
+  }
+
+  // Read the last 'float' render as 16-bit RGB, top row first, into `out` at pixel (dx, dy),
+  // skipping `sx`, `sy` source pixels and copying cw x ch.
+  readFloatInto(out, outW, w, h, dx, dy, sx, sy, cw, ch) {
+    const gl = this.gl;
+    const raw = new Float32Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.FLOAT, raw);
+    for (let y = 0; y < ch; y++) {
+      let i = ((h - 1 - (sy + y)) * w + sx) * 4, o = ((dy + y) * outW + dx) * 3;
+      for (let x = 0; x < cw; x++, i += 4, o += 3) {
+        out[o] = Math.min(1, Math.max(0, raw[i])) * 65535 + 0.5;
+        out[o + 1] = Math.min(1, Math.max(0, raw[i + 1])) * 65535 + 0.5;
+        out[o + 2] = Math.min(1, Math.max(0, raw[i + 2])) * 65535 + 0.5;
+      }
     }
   }
 

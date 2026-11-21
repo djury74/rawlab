@@ -79,23 +79,36 @@
 <dialog id="exportDlg">
   <form method="dialog">
     <h2>Export</h2>
-    <label>Format
-      <select id="exFormat">
-        <option value="image/jpeg">JPEG</option>
-        <option value="image/png">PNG (lossless)</option>
-        <option value="image/webp">WebP</option>
-      </select>
-    </label>
-    <label id="exQualityRow">Quality <output id="exQualityOut">92</output>
-      <input id="exQuality" type="range" min="50" max="100" value="92">
-    </label>
-    <label>Long edge (px)
-      <input id="exEdge" type="number" min="64" step="1" placeholder="Full size">
-    </label>
-    <p id="exInfo" class="fine"></p>
-    <div class="actions">
-      <button value="cancel" type="submit">Cancel</button>
-      <button id="exGo" class="primary" type="button">Export</button>
+    <div class="export">
+      <div class="pane">
+        <canvas id="exPreview" width="560" height="440" aria-label="Preview at 100%"></canvas>
+        <p class="fine">Preview at 100%, showing the result as it will be saved. Drag to look around.</p>
+      </div>
+      <div class="opts">
+        <label>Name <input id="exName" type="text" spellcheck="false"></label>
+        <label>Format
+          <select id="exFormat">
+            <option value="image/jpeg">JPEG</option>
+            <option value="image/webp">WebP</option>
+            <option value="image/png">PNG (lossless, 8-bit)</option>
+            <option value="image/tiff">TIFF (16-bit, for further editing)</option>
+          </select>
+        </label>
+        <label>Size <select id="exSize"></select></label>
+        <div class="dims">
+          <label>Width <input id="exW" type="number" min="16" step="1"></label>
+          <label>Height <input id="exH" type="number" min="16" step="1"></label>
+        </div>
+        <label id="exQualityRow">Quality <output id="exQualityOut">90</output>
+          <input id="exQuality" type="range" min="30" max="100" value="90">
+        </label>
+        <label id="exMetaRow" class="check"><input id="exMeta" type="checkbox" checked> Include camera details (EXIF)</label>
+        <p id="exInfo" class="info" role="status"></p>
+        <div class="actions">
+          <button value="cancel" type="submit">Cancel</button>
+          <button id="exGo" class="primary" type="button">Save</button>
+        </div>
+      </div>
     </div>
   </form>
 </dialog>

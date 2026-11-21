@@ -117,6 +117,7 @@ function shotInfo(meta) {
     make: meta.camera_make || '', model: meta.camera_model || '',
     lensName: (lens.Lens || mk.Lens || '').trim(),
     aperture: meta.aperture || 0, focal: meta.focal_len || 0,
+    shutter: meta.shutter || 0, iso: meta.iso_speed || 0, date: meta.timestamp instanceof Date ? meta.timestamp : null,
     minFocal: first(lens.MinFocal, mk.MinFocal), maxFocal: first(lens.MaxFocal, mk.MaxFocal),
     maxAperture: first(lens.MaxAp4MinFocal, mk.MaxAp, lens.EXIF_MaxAp),
   };

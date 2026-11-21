@@ -9,6 +9,7 @@ import { drawHistogram } from './ui/histogram.js';
 import { hitTest, cursorFor, dragRect, drawCrop } from './ui/crop.js';
 import { initLocals } from './ui/locals.js';
 import { LENS_PROFILES, detectProfile, activeProfile, lensParams } from './lens.js';
+import { withExif, tiff16, tiff16Size } from './export.js';
 
 const $ = (id) => document.getElementById(id);
 const DEF = defaults();
@@ -702,25 +703,17 @@ function pickWhiteBalance(p) {
 
 /* ---------- export ---------- */
 
-function exportSize() {
-  const g = geometry(state.settings, state.source.width, state.source.height);
-  const edge = parseInt($('exEdge').value, 10), long = Math.max(g.cw, g.ch);
-  const k = edge > 0 && edge < long ? edge / long : 1;
-  return { g, ow: Math.max(1, Math.round(g.cw * k)), oh: Math.max(1, Math.round(g.ch * k)) };
-}
+const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/tiff': '.tif' };
+const SIZE_PRESETS = [['full', 'Full size'], ['50%', '50%'], ['25%', '25%'], ['3840', 'Long edge 3840 px (4K)'], ['2048', 'Long edge 2048 px'], ['1600', 'Long edge 1600 px'], ['1080', 'Long edge 1080 px'], ['custom', 'Custom']];
+$('exSize').append(...SIZE_PRESETS.map(([v, t]) => el('option', { value: v }, t)));
+const ex = { canvas: null, key: '', blob: null, shown: null, token: 0, timer: 0, centre: [0.5, 0.5], full: [1, 1] };
 
-function updateExportInfo() {
-  const { ow, oh } = exportSize();
-  $('exInfo').textContent = `Output: ${ow} × ${oh} px (${(ow * oh / 1e6).toFixed(1)} MP), sRGB, 8-bit.`;
-  $('exQualityRow').hidden = $('exFormat').value === 'image/png';
-  $('exQualityOut').textContent = $('exQuality').value;
-}
-for (const id of ['exFormat', 'exQuality', 'exEdge']) $(id).addEventListener('input', updateExportInfo);
-
-async function renderFull(onProgress) {
-  const s = state.settings, wb = whiteBalance(s);
-  const { g, ow, oh } = exportSize();
-  const out = new OffscreenCanvas(ow, oh), ctx = out.getContext('2d');
+// Render the developed photo at ow x oh. `deep` gives 16-bit RGB data instead of a canvas.
+async function renderFull(ow, oh, onProgress, deep = false) {
+  const s = state.settings, wb = whiteBalance(s), lens = lensNow();
+  const g = geometry(s, state.source.width, state.source.height);
+  const out = deep ? null : new OffscreenCanvas(ow, oh), ctx = out?.getContext('2d');
+  const data = deep ? new Uint16Array(ow * oh * 3) : null;
   const TILE = 1024, PAD = 16;
   const total = Math.ceil(ow / TILE) * Math.ceil(oh / TILE);
   let done = 0;
@@ -728,37 +721,141 @@ async function renderFull(onProgress) {
     for (let tx = 0; tx < ow; tx += TILE) {
       const x0 = Math.max(0, tx - PAD), y0 = Math.max(0, ty - PAD);
       const x1 = Math.min(ow, tx + TILE + PAD), y1 = Math.min(oh, ty + TILE + PAD);
-      const w = x1 - x0, h = y1 - y0;
-      renderer.render({ settings: s, wb, g, af: exportAffine(g, ow, oh, x0, y0), w, h, dest: 'buffer', slot: 'export', lens: lensNow() });
-      const img = new ImageData(renderer.readPixels(w, h), w, h);
-      ctx.putImageData(img, x0, y0, tx - x0, ty - y0, Math.min(TILE, ow - tx), Math.min(TILE, oh - ty));
+      const w = x1 - x0, h = y1 - y0, cw = Math.min(TILE, ow - tx), ch = Math.min(TILE, oh - ty);
+      renderer.render({ settings: s, wb, g, af: exportAffine(g, ow, oh, x0, y0), w, h, dest: deep ? 'float' : 'buffer', slot: 'export', lens });
+      if (deep) renderer.readFloatInto(data, ow, w, h, tx, ty, tx - x0, ty - y0, cw, ch);
+      else ctx.putImageData(new ImageData(renderer.readPixels(w, h), w, h), x0, y0, tx - x0, ty - y0, cw, ch);
       onProgress?.(++done / total);
       await new Promise((r) => setTimeout(r));
     }
   }
   renderer.release('export');
-  return out;
+  return deep ? data : out;
 }
 
-$('btnExport').addEventListener('click', () => { if (state.source) { updateExportInfo(); $('exportDlg').showModal(); } });
+function exportSize() {
+  const [fw, fh] = ex.full;
+  const w = Math.min(fw, Math.max(16, parseInt($('exW').value, 10) || fw));
+  return { ow: w, oh: Math.max(1, Math.round(w * fh / fw)) };
+}
+
+// Fill width and height from the chosen size preset.
+function applySizePreset() {
+  const [fw, fh] = ex.full, v = $('exSize').value, long = Math.max(fw, fh);
+  let k = 1;
+  if (v.endsWith('%')) k = parseInt(v, 10) / 100;
+  else if (v !== 'full' && v !== 'custom') k = Math.min(1, parseInt(v, 10) / long);
+  if (v !== 'custom') { $('exW').value = Math.round(fw * k); $('exH').value = Math.round(fh * k); }
+}
+
+const fileSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 1 : 2) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+
+// Re-render and re-encode as needed, then show the real result and its size.
+async function refreshExport() {
+  const token = ++ex.token;
+  const type = $('exFormat').value, lossy = type === 'image/jpeg' || type === 'image/webp';
+  const { ow, oh } = exportSize();
+  $('exQualityRow').hidden = !lossy;
+  $('exQualityOut').textContent = $('exQuality').value;
+  $('exMetaRow').hidden = type !== 'image/jpeg' || !state.source.shot;
+  $('exGo').disabled = true;
+  try {
+    if (ex.key !== `${ow}x${oh}`) {
+      $('exInfo').textContent = 'Rendering…';
+      const canvas = await renderFull(ow, oh, (f) => { if (token === ex.token) $('exInfo').textContent = `Rendering ${Math.round(f * 100)}%`; });
+      if (token !== ex.token) return;
+      ex.canvas = canvas; ex.key = `${ow}x${oh}`;
+    }
+    ex.blob = null; ex.shown = ex.canvas;
+    let bytes;
+    if (type === 'image/tiff') bytes = tiff16Size(ow, oh);
+    else {
+      $('exInfo').textContent = 'Encoding…';
+      let blob = await ex.canvas.convertToBlob({ type, quality: $('exQuality').value / 100 });
+      if (token !== ex.token) return;
+      if (lossy) ex.shown = await createImageBitmap(blob);   // preview shows the compression itself
+      if (type === 'image/jpeg' && $('exMeta').checked) blob = await withExif(blob, state.source.shot, ow, oh);
+      if (token !== ex.token) return;
+      ex.blob = blob; bytes = blob.size;
+    }
+    $('exInfo').textContent = `${ow} × ${oh} px  ·  ${(ow * oh / 1e6).toFixed(1)} MP  ·  ${fileSize(bytes)}${type === 'image/tiff' ? '  ·  16-bit, uncompressed' : ''}`;
+    $('exGo').disabled = false;
+    drawExportPreview();
+  } catch (err) {
+    console.error(err);
+    if (token === ex.token) $('exInfo').textContent = 'Could not render: ' + (err.message || err);
+  }
+}
+
+function drawExportPreview() {
+  const c = $('exPreview'), ctx = c.getContext('2d'), img = ex.shown;
+  ctx.fillStyle = '#161616'; ctx.fillRect(0, 0, c.width, c.height);
+  if (!img) return;
+  // 100% view around the chosen centre, or the whole image if it is smaller than the pane.
+  const sx = Math.round(Math.max(0, Math.min(img.width - c.width, ex.centre[0] * img.width - c.width / 2)));
+  const sy = Math.round(Math.max(0, Math.min(img.height - c.height, ex.centre[1] * img.height - c.height / 2)));
+  const w = Math.min(c.width, img.width), h = Math.min(c.height, img.height);
+  ctx.drawImage(img, sx, sy, w, h, Math.round((c.width - w) / 2), Math.round((c.height - h) / 2), w, h);
+}
+
+const queueExport = () => { clearTimeout(ex.timer); $('exGo').disabled = true; ex.timer = setTimeout(refreshExport, 250); };
+$('exSize').addEventListener('change', () => { applySizePreset(); queueExport(); });
+$('exW').addEventListener('input', () => { const [fw, fh] = ex.full; $('exSize').value = 'custom'; $('exH').value = Math.round((parseInt($('exW').value, 10) || 0) * fh / fw) || ''; queueExport(); });
+$('exH').addEventListener('input', () => { const [fw, fh] = ex.full; $('exSize').value = 'custom'; $('exW').value = Math.round((parseInt($('exH').value, 10) || 0) * fw / fh) || ''; queueExport(); });
+for (const id of ['exFormat', 'exQuality', 'exMeta']) $(id).addEventListener('input', queueExport);
+
+{ // drag the preview to look around at 100%
+  const c = $('exPreview'); let from = null;
+  c.addEventListener('pointerdown', (e) => { from = [e.clientX, e.clientY, ...ex.centre]; c.setPointerCapture(e.pointerId); });
+  c.addEventListener('pointermove', (e) => {
+    if (!from || !ex.shown) return;
+    const k = c.width / c.getBoundingClientRect().width;
+    ex.centre = [Math.min(1, Math.max(0, from[2] - (e.clientX - from[0]) * k / ex.shown.width)), Math.min(1, Math.max(0, from[3] - (e.clientY - from[1]) * k / ex.shown.height))];
+    drawExportPreview();
+  });
+  c.addEventListener('pointerup', () => { from = null; });
+}
+
+$('btnExport').addEventListener('click', () => {
+  if (!state.source) return;
+  const g = geometry(state.settings, state.source.width, state.source.height);
+  ex.full = [Math.round(g.cw), Math.round(g.ch)]; ex.key = ''; ex.canvas = null; ex.shown = null; ex.centre = [0.5, 0.5];
+  try {
+    const last = JSON.parse(localStorage.getItem('rawlab:export') || '{}');
+    if (last.format) $('exFormat').value = last.format;
+    if (last.quality) $('exQuality').value = last.quality;
+    if (last.size && last.size !== 'custom') $('exSize').value = last.size;
+    if (typeof last.meta === 'boolean') $('exMeta').checked = last.meta;
+  } catch { /* use the defaults */ }
+  if ($('exSize').value === 'custom') $('exSize').value = 'full';
+  $('exName').value = baseName();
+  applySizePreset();
+  $('exportDlg').showModal();
+  refreshExport();
+});
+
 $('exGo').addEventListener('click', async () => {
-  const type = $('exFormat').value, btn = $('exGo');
+  const type = $('exFormat').value, btn = $('exGo'), { ow, oh } = exportSize();
   btn.disabled = true;
   try {
-    const out = await renderFull((f) => { btn.textContent = `Rendering ${Math.round(f * 100)}%`; });
-    btn.textContent = 'Encoding…';
-    const blob = await out.convertToBlob({ type, quality: $('exQuality').value / 100 });
-    download(blob, baseName() + { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[type]);
+    let blob = ex.blob;
+    if (type === 'image/tiff') {
+      const data = await renderFull(ow, oh, (f) => { btn.textContent = `Rendering ${Math.round(f * 100)}%`; }, true);
+      blob = tiff16(data, ow, oh);
+    }
+    const name = ($('exName').value.trim() || baseName()).replace(/[\\/:*?"<>|]+/g, '_');
+    download(blob, name + EXT[type]);
+    try { localStorage.setItem('rawlab:export', JSON.stringify({ format: type, quality: $('exQuality').value, size: $('exSize').value, meta: $('exMeta').checked })); } catch { /* not essential */ }
     $('exportDlg').close();
-    toast(`Exported ${out.width} × ${out.height} px, ${(blob.size / 1048576).toFixed(1)} MB.`);
+    toast(`Exported ${ow} × ${oh} px, ${fileSize(blob.size)}.`);
   } catch (err) {
     console.error(err);
     toast('Export failed: ' + (err.message || err), true);
   } finally {
-    btn.disabled = false; btn.textContent = 'Export';
-    requestRender();
+    btn.disabled = false; btn.textContent = 'Save';
   }
 });
+$('exportDlg').addEventListener('close', () => { ex.token++; ex.canvas = null; ex.shown = null; ex.blob = null; ex.key = ''; requestRender(); });
 window.rawlab.renderFull = renderFull;
 
 /* ---------- toolbar and keyboard ---------- */
