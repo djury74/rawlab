@@ -145,3 +145,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 .stars button:hover { background: none; color: #f0b352; }
 .strip-list .rate { font-size: 10px; line-height: 1; color: var(--accent); height: 10px; letter-spacing: 1px; }
 .strip-head select { min-height: 0; padding: 1px 6px; font-size: 12px; }
+
+a { color: var(--accent); }
+a.help { flex: none; color: var(--muted); text-decoration: none; padding: 4px 6px; border-radius: 4px; }
+a.help:hover { color: var(--text); background: var(--panel2); }

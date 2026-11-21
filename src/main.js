@@ -462,6 +462,7 @@ const srcToScreen = (uv) => invertAffine(state.af, state.g.srcToFrame(uv));
 const locals = initLocals({ state, renderer, requestRender, commit, setTool, toast, screenToSrc, srcToScreen });
 $('panels').children[0].after(locals.node);
 const heal = initHeal({ node: $('healbar'), state, requestRender, commit, setTool, toast, screenToSrc, srcToScreen });
+locals.refresh(); heal.refresh();      // start with the empty-state panels, before any photo is open
 
 /* ---------- lens corrections ---------- */
 
