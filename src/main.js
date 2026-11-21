@@ -260,8 +260,8 @@ const setStart = (auto) => {
   refreshAll(); commit(auto ? 'Auto exposure' : 'Exposure as shot');
 };
 const startButtons = [
-  el('button', { class: 'tab', type: 'button', title: 'Exposure exactly as the camera recorded it', onclick: () => setStart(false) }, 'As shot'),
-  el('button', { class: 'tab', type: 'button', title: 'Brighten so the photo uses the available range', onclick: () => setStart(true) }, 'Auto'),
+  el('button', { type: 'button', title: 'Exposure exactly as the camera recorded it', onclick: () => setStart(false) }, 'As shot'),
+  el('button', { type: 'button', title: 'Brighten so the photo uses the available range', onclick: () => setStart(true) }, 'Auto'),
 ];
 
 const basic = [
