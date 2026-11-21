@@ -33,7 +33,7 @@ let renderer;
 try {
   renderer = new Renderer(canvas);
 } catch (err) {
-  $('empty').replaceChildren(el('h1', {}, 'This browser cannot run RawLab'), el('p', {}, err.message));
+  $('empty').replaceChildren(el('h1', {}, 'This browser cannot run Photolab'), el('p', {}, err.message));
   throw err;
 }
 window.rawlab = { state, renderer }; // handy for debugging from the console
@@ -441,6 +441,31 @@ $('btnPaste').addEventListener('click', () => {
   } catch { toast('Nothing to paste.', true); }
 });
 
+// Save a file where the user chooses. Browsers with a save dialog (Chrome, Edge)
+// let them pick the folder and name; others fall back to the Downloads folder.
+// `getBlob` runs after the dialog so slow renders do not delay it. Returns the
+// saved blob, or null if the user cancelled.
+async function saveFile(getBlob, name, type, description) {
+  if (window.showSaveFilePicker) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({ id: 'photolab-export', suggestedName: name, types: [{ description, accept: { [type]: [name.slice(name.lastIndexOf('.'))] } }] });
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      handle = null;                      // picker unavailable here (for example inside a frame)
+    }
+    if (handle) {
+      const blob = await getBlob();
+      const out = await handle.createWritable();
+      await out.write(blob); await out.close();
+      return blob;
+    }
+  }
+  const blob = await getBlob();
+  download(blob, name);
+  return blob;
+}
+
 function download(blob, name) {
   const a = el('a', { href: URL.createObjectURL(blob), download: name });
   document.body.append(a); a.click(); a.remove();
@@ -449,7 +474,7 @@ function download(blob, name) {
 const baseName = () => state.source.name.replace(/\.[^.]+$/, '');
 
 $('btnSaveJson').addEventListener('click', () => {
-  download(new Blob([JSON.stringify({ app: 'RawLab', file: state.source.name, settings: state.settings }, null, 2)], { type: 'application/json' }), baseName() + '.rawlab.json');
+  download(new Blob([JSON.stringify({ app: 'Photolab', file: state.source.name, settings: state.settings }, null, 2)], { type: 'application/json' }), baseName() + '.photolab.json');
 });
 $('btnLoadJson').addEventListener('click', () => $('jsonInput').click());
 $('jsonInput').addEventListener('change', async (e) => {
@@ -460,7 +485,7 @@ $('jsonInput').addEventListener('change', async (e) => {
     state.settings = normalise(data.settings || data);
     if (!cropFits(state.settings.crop, state.g.Wf, state.g.Hf, 2)) state.settings.crop = clone(DEF.crop);
     refreshAll(); commit('Load sidecar');
-  } catch { toast('That file is not a RawLab settings file.', true); }
+  } catch { toast('That file is not a Photolab settings file.', true); }
 });
 
 /* ---------- crop tool ---------- */
@@ -838,13 +863,14 @@ $('exGo').addEventListener('click', async () => {
   const type = $('exFormat').value, btn = $('exGo'), { ow, oh } = exportSize();
   btn.disabled = true;
   try {
-    let blob = ex.blob;
-    if (type === 'image/tiff') {
-      const data = await renderFull(ow, oh, (f) => { btn.textContent = `Rendering ${Math.round(f * 100)}%`; }, true);
-      blob = tiff16(data, ow, oh);
-    }
     const name = ($('exName').value.trim() || baseName()).replace(/[\\/:*?"<>|]+/g, '_');
-    download(blob, name + EXT[type]);
+    const ready = ex.blob;
+    const blob = await saveFile(async () => {
+      if (type !== 'image/tiff') return ready;
+      const data = await renderFull(ow, oh, (f) => { btn.textContent = `Rendering ${Math.round(f * 100)}%`; }, true);
+      return tiff16(data, ow, oh);
+    }, name + EXT[type], type, $('exFormat').selectedOptions[0].textContent);
+    if (!blob) return;                    // cancelled in the save dialog: keep the export window open
     try { localStorage.setItem('rawlab:export', JSON.stringify({ format: type, quality: $('exQuality').value, size: $('exSize').value, meta: $('exMeta').checked })); } catch { /* not essential */ }
     $('exportDlg').close();
     toast(`Exported ${ow} × ${oh} px, ${fileSize(blob.size)}.`);

@@ -51,7 +51,7 @@ function exifSegment(shot, width, height) {
   if (stamp) exif.push({ tag: 0x9003, type: 2, value: stamp });
   if (shot.lensName) exif.push({ tag: 0xA434, type: 2, value: shot.lensName });
   const ifd0 = (exifOffset) => {
-    const e = [{ tag: 0x0131, type: 2, value: 'RawLab' }, { tag: 0x8769, type: 4, value: exifOffset }];
+    const e = [{ tag: 0x0131, type: 2, value: 'Photolab' }, { tag: 0x8769, type: 4, value: exifOffset }];
     if (shot.make) e.push({ tag: 0x010F, type: 2, value: shot.make });
     if (shot.model) e.push({ tag: 0x0110, type: 2, value: shot.model });
     if (stamp) e.push({ tag: 0x0132, type: 2, value: stamp });
@@ -82,7 +82,7 @@ export function tiff16(rgb, width, height) {
     { tag: 256, type: 4, value: width }, { tag: 257, type: 4, value: height },
     { tag: 258, type: 3, value: [16, 16, 16] }, { tag: 259, type: 3, value: 1 }, { tag: 262, type: 3, value: 2 },
     { tag: 273, type: 4, value: dataAt }, { tag: 277, type: 3, value: 3 }, { tag: 278, type: 4, value: height },
-    { tag: 279, type: 4, value: rgb.byteLength }, { tag: 284, type: 3, value: 1 }, { tag: 305, type: 2, value: 'RawLab' },
+    { tag: 279, type: 4, value: rgb.byteLength }, { tag: 284, type: 3, value: 1 }, { tag: 305, type: 2, value: 'Photolab' },
   ];
   const size = buildIFD(entries(0), 8).length;
   const ifd = buildIFD(entries(8 + size), 8);

@@ -1,4 +1,4 @@
-# RawLab
+# Photolab
 
 A browser-based, non-destructive RAW photo developer. Files are decoded and
 edited locally; nothing is uploaded.

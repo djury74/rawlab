@@ -36,11 +36,11 @@ async function loadRaw(file) {
     const meta = await raw.metadata(true);
     if (!img?.data) throw new Error('The decoder returned no image data.');
     if (img.colors !== 3) throw new Error(`Unsupported sensor layout (${img.colors} colour channels).`);
-    let data = img.data;
+    let data = img.data, width, height;
     if (!(data instanceof Uint16Array)) {
       data = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
     }
-    const { width, height } = img;
+    ({ data, width, height } = trimToCameraSize(data, img.width, img.height, meta));
     const color = meta.color_data || meta.color || {};
     const mul = (color.pre_mul || []).slice(0, 3).filter((v) => v > 0);
     const scale = mul.length === 3 ? Math.max(...mul) / Math.min(...mul) : 1;
@@ -67,6 +67,39 @@ async function loadRaw(file) {
   } finally {
     raw.dispose();
   }
+}
+
+// The decoder returns every usable sensor pixel, a few more than the camera
+// keeps. Trim to the size the camera itself produces, so dimensions match its
+// JPEGs and other software.
+function trimToCameraSize(data, width, height, meta) {
+  let c = meta.raw_inset_crops?.[0];
+  const keep = { data, width, height };
+  if (!c || !(c.cwidth > 0) || !(c.cheight > 0) || c.cwidth >= 65535) {
+    // No crop recorded (common for Nikon): the full-size JPEG preview the camera
+    // embeds in the file has the size the camera considers final.
+    const tw = meta.thumb_width, th = meta.thumb_height;
+    const long = Math.max(tw, th), short = Math.min(tw, th);
+    const near = (a, b) => a <= b && a >= b * 0.98;
+    if (!(near(long, Math.max(width, height)) && near(short, Math.min(width, height)))) return keep;
+    c = { cwidth: tw, cheight: th, cleft: -1, ctop: -1 };
+  }
+  let cw = c.cwidth, ch = c.cheight;
+  if ((width < height) !== (cw < ch)) [cw, ch] = [ch, cw];     // photo was rotated by the decoder
+  if (cw > width || ch > height || (cw === width && ch === height)) return keep;
+  let left = Math.floor((width - cw) / 2), top = Math.floor((height - ch) / 2);
+  if (!meta.flip && c.cleft >= 0) {
+    // Use the camera's exact offsets when they are plausible; otherwise stay centred.
+    const l = c.cleft - (meta.left_margin || 0), t = c.ctop - (meta.top_margin || 0);
+    if (l >= 0 && l <= width - cw && Math.abs(l - left) <= 16) left = l;
+    if (t >= 0 && t <= height - ch && Math.abs(t - top) <= 16) top = t;
+  }
+  const out = new Uint16Array(cw * ch * 3);
+  for (let y = 0; y < ch; y++) {
+    const from = ((top + y) * width + left) * 3;
+    out.set(data.subarray(from, from + cw * 3), y * cw * 3);
+  }
+  return { data: out, width: cw, height: ch };
 }
 
 // Exposure (in stops) that brings the brightest 1% of the photo up to half of
