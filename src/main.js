@@ -33,7 +33,7 @@ let renderer;
 try {
   renderer = new Renderer(canvas);
 } catch (err) {
-  $('empty').replaceChildren(el('h1', {}, 'This browser cannot run Photolab'), el('p', {}, err.message));
+  $('empty').replaceChildren(el('h1', {}, "This browser cannot run Duncan's Photo Lab"), el('p', {}, err.message));
   throw err;
 }
 window.rawlab = { state, renderer }; // handy for debugging from the console
@@ -474,7 +474,7 @@ function download(blob, name) {
 const baseName = () => state.source.name.replace(/\.[^.]+$/, '');
 
 $('btnSaveJson').addEventListener('click', () => {
-  download(new Blob([JSON.stringify({ app: 'Photolab', file: state.source.name, settings: state.settings }, null, 2)], { type: 'application/json' }), baseName() + '.photolab.json');
+  download(new Blob([JSON.stringify({ app: "Duncan's Photo Lab", file: state.source.name, settings: state.settings }, null, 2)], { type: 'application/json' }), baseName() + '.photolab.json');
 });
 $('btnLoadJson').addEventListener('click', () => $('jsonInput').click());
 $('jsonInput').addEventListener('change', async (e) => {
@@ -485,7 +485,7 @@ $('jsonInput').addEventListener('change', async (e) => {
     state.settings = normalise(data.settings || data);
     if (!cropFits(state.settings.crop, state.g.Wf, state.g.Hf, 2)) state.settings.crop = clone(DEF.crop);
     refreshAll(); commit('Load sidecar');
-  } catch { toast('That file is not a Photolab settings file.', true); }
+  } catch { toast("That file is not a Duncan's Photo Lab settings file.", true); }
 });
 
 /* ---------- crop tool ---------- */
