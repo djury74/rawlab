@@ -158,10 +158,10 @@ export function buildCurveLUT(curve, size = 1024) {
   return out;
 }
 
-// Base tone curve of the Standard profile, linear in -> linear out. Fitted so
-// that a default render sits close to a Nikon camera's own JPEG rendering:
-// mid-tones lifted by roughly two thirds of a stop, shadows held, highlights rolled off.
-const BASE_CURVE = [[0, 0], [0.02, 0.012], [0.05, 0.036], [0.12, 0.135], [0.22, 0.33], [0.30, 0.49], [0.42, 0.71], [0.6, 0.89], [0.8, 0.97], [1, 1]];
+// Base tone curve of the Standard profile, linear in -> linear out: the kind of
+// curve a camera applies to its own JPEGs. Mid-grey is lifted by a little over
+// half a stop, shadows are deepened slightly and highlights roll off.
+const BASE_CURVE = [[0, 0], [0.01, 0.006], [0.03, 0.025], [0.09, 0.12], [0.18, 0.27], [0.35, 0.52], [0.6, 0.80], [0.8, 0.93], [1, 1]];
 
 // Lookup indexed by sqrt(input) so the shadows get enough resolution.
 export function buildBaseLUT(size = 1024) {

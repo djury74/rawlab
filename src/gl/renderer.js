@@ -149,7 +149,7 @@ export class Renderer {
     }
     const tex = this.#texture(gl.LINEAR_MIPMAP_LINEAR);
     gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(w, h))) + 1, gl.RGBA16F, w, h);
-    this.#draw(prog, tex, w, h, { uSrc: staging });
+    this.#draw(prog, tex, w, h, { uSrc: staging }, (gl, u) => gl.uniform1f(u.uScale, source.scale ?? 1));
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.deleteTexture(staging);

@@ -22,8 +22,10 @@ because the decoder runs in a worker.
 
 ## How it works
 
-- `src/decode.js` decodes RAW files with LibRaw compiled to WebAssembly and
-  asks for 16-bit linear RGB with the camera's white balance. JPEG/PNG also open.
+- `src/decode.js` decodes RAW files with LibRaw compiled to WebAssembly, as
+  16-bit RGB with the camera's white balance, keeping highlight detail above
+  nominal white. The decoder's transfer curve is undone on import so the
+  pipeline works on linear light. JPEG/PNG also open.
 - `src/gl/` is the WebGL2 pipeline. Data stays linear half-float until the
   final pass: resample (crop/rotate) -> noise reduction -> develop (sharpen,
   white balance, exposure, local tone, curve, colour mixer, grading, effects).
@@ -51,6 +53,5 @@ CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 
 ## Not built yet
 
-Healing, lens profiles beyond the one below, highlight
-reconstruction beyond the sensor clip point, 16-bit TIFF export, embedded
+Healing, lens profiles beyond the one above, 16-bit TIFF export, embedded
 colour profiles other than sRGB, and a multi-image library.

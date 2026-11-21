@@ -12,7 +12,7 @@ const zeros8 = () => [0, 0, 0, 0, 0, 0, 0, 0];
 
 export function defaults() {
   return {
-    version: 1,
+    version: 2,               // 2: rendering works on true linear data
     profile: 'standard',      // standard | vivid | linear
     bw: false,
     temp: null, tint: null,   // null = as shot

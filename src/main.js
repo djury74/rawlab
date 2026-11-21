@@ -52,6 +52,15 @@ function busy(text) { $('busy').hidden = !text; if (text) $('busyText').textCont
 
 const editKey = (src) => `rawlab:edit:${src.name}:${src.size}`;
 
+// Starting point for a photo: defaults, plus automatic exposure for RAW files.
+// Rendered images (JPEG, PNG) already carry a tone curve, so they start flat.
+function freshSettings() {
+  const s = defaults(), src = state.source;
+  if (src?.kind === 'raw') s.exposure = src.autoExposure || 0;
+  if (src?.kind === 'bitmap') s.profile = 'linear';
+  return s;
+}
+
 async function openFile(file) {
   if (!file) return;
   busy(`Decoding ${file.name}…`);
@@ -61,10 +70,11 @@ async function openFile(file) {
     state.source = source;
     let restored = false;
     try {
-      const saved = localStorage.getItem(editKey(source));
-      state.settings = saved ? normalise(JSON.parse(saved)) : defaults();
-      restored = !!saved;
-    } catch { state.settings = defaults(); }
+      // Edits saved before version 2 were made on a different rendering; start those afresh.
+      const saved = JSON.parse(localStorage.getItem(editKey(source)) || 'null');
+      restored = saved?.version >= 2;
+      state.settings = restored ? normalise(saved) : freshSettings();
+    } catch { state.settings = freshSettings(); }
     state.history = []; state.hIndex = -1;
     state.view = { fit: true, zoom: 1, pan: [0, 0] };
     state.selLocal = null;
@@ -76,6 +86,7 @@ async function openFile(file) {
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
     refreshAll();
     if (restored) toast('Previous edits for this file were restored. Use Reset to start again.');
+    else if (state.settings.exposure > 0) toast(`Exposure set automatically to +${state.settings.exposure.toFixed(2)}. Adjust it or press Auto again any time.`);
   } catch (err) {
     console.error(err);
     toast(err.message || String(err), true);
@@ -105,7 +116,7 @@ function whiteBalance(s) {
 const lensNow = () => lensParams(state.settings.lens, state.source?.shot);
 
 function beforeSettings() {
-  const s = defaults(), c = state.settings;
+  const s = freshSettings(), c = state.settings;
   s.crop = clone(c.crop); s.rot = c.rot; s.flipH = c.flipH; s.flipV = c.flipV; s.lens = clone(c.lens);
   return s;
 }
@@ -257,7 +268,11 @@ const basic = [
     get: () => state.settings.tint, set: (v) => { state.settings.tint = v; },
     onInput: () => { syncSelects(); requestRender(); }, onCommit: commit,
   })),
-  el('div', { class: 'sub' }, 'Tone'),
+  el('div', { class: 'tabs', style: 'margin:10px 0 2px' }, el('div', { class: 'sub', style: 'margin:0' }, 'Tone'),
+    el('button', { class: 'link', type: 'button', title: 'Set exposure automatically from the brightest parts of the photo', onclick: () => {
+      if (!state.source) return;
+      state.settings.exposure = state.source.autoExposure || 0; refreshAll(); commit('Auto exposure');
+    } }, 'Auto')),
   S('Exposure', 'exposure', { min: -5, max: 5, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2) }),
   S('Contrast', 'contrast'), S('Highlights', 'highlights'), S('Shadows', 'shadows'), S('Whites', 'whites'), S('Blacks', 'blacks'),
   el('div', { class: 'sub' }, 'Presence'),
@@ -733,7 +748,7 @@ window.rawlab.renderFull = renderFull;
 
 $('btnUndo').addEventListener('click', () => restore(state.hIndex - 1));
 $('btnRedo').addEventListener('click', () => restore(state.hIndex + 1));
-$('btnReset').addEventListener('click', () => { state.settings = defaults(); state.view.fit = true; refreshAll(); commit('Reset all'); });
+$('btnReset').addEventListener('click', () => { state.settings = freshSettings(); state.view.fit = true; refreshAll(); commit('Reset all'); });
 $('btnCrop').addEventListener('click', () => setTool(state.tool === 'crop' ? 'none' : 'crop'));
 $('btnBefore').addEventListener('click', () => { state.showBefore = !state.showBefore; updateButtons(); requestRender(); });
 $('btnClip').addEventListener('click', () => { state.clip = !state.clip; updateButtons(); requestRender(); });

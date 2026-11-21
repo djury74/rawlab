@@ -8,7 +8,7 @@ export function el(tag, attrs = {}, ...children) {
     else if (v === true) node.setAttribute(k, '');
     else if (v !== false && v != null) node.setAttribute(k, v);
   }
-  for (const c of children.flat()) if (c != null) node.append(c);
+  for (const c of children.flat(Infinity)) if (c != null) node.append(c);
   return node;
 }
 

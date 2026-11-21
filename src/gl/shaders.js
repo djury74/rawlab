@@ -11,10 +11,15 @@ export const FRAG_IMPORT_U16 = `#version 300 es
 precision highp float;
 precision highp usampler2D;
 uniform usampler2D uSrc;
+uniform float uScale;
 out vec4 o;
 void main() {
-  uvec3 c = texelFetch(uSrc, ivec2(gl_FragCoord.xy), 0).rgb;
-  o = vec4(vec3(c) / 65535.0, 1.0);
+  // The decoder always applies the BT.709 transfer curve; undo it to get linear
+  // light, then restore the scale so that 1.0 is nominal white. Values above 1.0
+  // are highlight detail kept from the colour channels that had not clipped.
+  vec3 v = vec3(texelFetch(uSrc, ivec2(gl_FragCoord.xy), 0).rgb) / 65535.0;
+  vec3 lin = mix(v / 4.5, pow((v + 0.099) / 1.099, vec3(1.0 / 0.45)), step(0.081, v));
+  o = vec4(lin * uScale, 1.0);
 }`;
 
 // sRGB-encoded 8-bit image (JPEG/PNG); the sampler linearises it.
@@ -260,8 +265,18 @@ void main() {
   c *= exp2(uWhites * 0.8 * e * e);
   c += uBlacks * 0.05 * pow(1.0 - e, 3.0);
 
-  bool clipHi = max(max(c.r, c.g), c.b) >= 1.0;
+  c = max(c, 0.0);
   bool clipLo = max(max(c.r, c.g), c.b) <= 0.0;
+  if (uProfile != 2) {
+    // Highlight shoulder: roll tones above 0.8 smoothly into white instead of
+    // cutting them off, fading colour out as they approach it.
+    float m = max(max(c.r, c.g), c.b);
+    if (m > 0.8) {
+      float ms = 0.8 + 0.2 * (1.0 - exp(-(m - 0.8) / 0.2));
+      c = mix(c * (ms / m), vec3(ms), smoothstep(0.9, 2.2, m));
+    }
+  }
+  bool clipHi = max(max(c.r, c.g), c.b) >= (uProfile != 2 ? 0.985 : 1.0);
   c = clamp(c, 0.0, 1.0);
 
   // Camera-style base rendering: sensor data is linear and looks dark and flat
