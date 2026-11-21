@@ -86,7 +86,7 @@ async function openFile(file) {
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
     refreshAll();
     if (restored) toast('Previous edits for this file were restored. Use Reset to start again.');
-    else if (state.settings.exposure > 0) toast(`Exposure set automatically to +${state.settings.exposure.toFixed(2)}. Adjust it or press Auto again any time.`);
+    else if (state.settings.exposure > 0) toast(`Exposure set automatically to +${state.settings.exposure.toFixed(2)}. Choose As shot to see it unadjusted.`);
   } catch (err) {
     console.error(err);
     toast(err.message || String(err), true);
@@ -253,6 +253,17 @@ const profileSelect = el('select', { 'aria-label': 'Profile', onchange: () => { 
   [['standard', 'Standard'], ['vivid', 'Vivid'], ['linear', 'Linear (flat)']].map(([v, t]) => el('option', { value: v }, t)));
 const bwCheck = el('input', { type: 'checkbox', onchange: () => { state.settings.bw = bwCheck.checked; requestRender(); commit(bwCheck.checked ? 'Black and white' : 'Colour'); } });
 
+// Starting brightness: as the camera exposed it, or lifted automatically.
+const setStart = (auto) => {
+  if (!state.source) return;
+  state.settings.exposure = auto ? state.source.autoExposure || 0 : 0;
+  refreshAll(); commit(auto ? 'Auto exposure' : 'Exposure as shot');
+};
+const startButtons = [
+  el('button', { class: 'tab', type: 'button', title: 'Exposure exactly as the camera recorded it', onclick: () => setStart(false) }, 'As shot'),
+  el('button', { class: 'tab', type: 'button', title: 'Brighten so the photo uses the available range', onclick: () => setStart(true) }, 'Auto'),
+];
+
 const basic = [
   el('div', { class: 'row' }, el('span', {}, 'Profile'), profileSelect, el('label', { class: 'check' }, bwCheck, 'B&W')),
   el('div', { class: 'sub' }, 'White balance'),
@@ -268,12 +279,9 @@ const basic = [
     get: () => state.settings.tint, set: (v) => { state.settings.tint = v; },
     onInput: () => { syncSelects(); requestRender(); }, onCommit: commit,
   })),
-  el('div', { class: 'tabs', style: 'margin:10px 0 2px' }, el('div', { class: 'sub', style: 'margin:0' }, 'Tone'),
-    el('button', { class: 'link', type: 'button', title: 'Set exposure automatically from the brightest parts of the photo', onclick: () => {
-      if (!state.source) return;
-      state.settings.exposure = state.source.autoExposure || 0; refreshAll(); commit('Auto exposure');
-    } }, 'Auto')),
-  S('Exposure', 'exposure', { min: -5, max: 5, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2) }),
+  el('div', { class: 'sub' }, 'Tone'),
+  el('div', { class: 'row' }, el('span', {}, 'Brightness'), startButtons),
+  S('Exposure', 'exposure', { min: -5, max: 5, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2), onInput: () => { syncStart(); requestRender(); } }),
   S('Contrast', 'contrast'), S('Highlights', 'highlights'), S('Shadows', 'shadows'), S('Whites', 'whites'), S('Blacks', 'blacks'),
   el('div', { class: 'sub' }, 'Presence'),
   S('Clarity', 'clarity'), S('Dehaze', 'dehaze'), S('Vibrance', 'vibrance'), S('Saturation', 'saturation'),
@@ -358,7 +366,16 @@ function syncLens() {
   } else lensStatus.textContent = `Applied: ${active?.name}${shot?.aperture ? ` at f/${+shot.aperture.toFixed(1)}` : ' (aperture unknown, using wide open)'}.`;
 }
 
+function syncStart() {
+  const e = state.settings.exposure, auto = state.source?.autoExposure || 0;
+  startButtons[0].classList.toggle('on', !!state.source && e === 0);
+  startButtons[1].classList.toggle('on', !!state.source && auto > 0 && Math.abs(e - auto) < 0.005);
+  startButtons[1].disabled = !state.source || state.source.kind !== 'raw';
+  startButtons[1].textContent = auto > 0 ? `Auto (+${auto.toFixed(2)})` : 'Auto';
+}
+
 function syncSelects() {
+  syncStart();
   syncLens();
   const s = state.settings;
   profileSelect.value = s.profile;

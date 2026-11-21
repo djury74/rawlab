@@ -69,8 +69,8 @@ async function loadRaw(file) {
   }
 }
 
-// Exposure (in stops) that brings the brightest 1% of the photo up to just below
-// white. It only ever brightens: a photo that already uses the range gets 0.
+// Exposure (in stops) that brings the brightest 1% of the photo up to half of
+// white, which the Standard tone curve then renders as a bright highlight. It only ever brightens: a photo that already uses the range gets 0.
 function autoExposure(data, scale) {
   const hist = new Uint32Array(4096);
   let n = 0;
@@ -82,7 +82,9 @@ function autoExposure(data, scale) {
   for (; bin > 0; bin--) { acc += hist[bin]; if (acc >= n * 0.01) break; }
   const p99 = (bin / 4095) ** 2 * scale;
   if (!(p99 > 0)) return 0;
-  const ev = Math.log2(0.75 / p99);
+  // Target chosen so the result sits where typical raw viewers put it; brighter
+  // targets washed out indoor shots.
+  const ev = Math.log2(0.5 / p99);
   return Math.round(Math.min(2.5, Math.max(0, ev)) * 20) / 20;
 }
 
