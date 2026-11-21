@@ -45,11 +45,19 @@ One profile is included: Nikon AF-S DX Nikkor 35mm f/1.8G. Its calibration
 values come from the [lensfun](https://lensfun.github.io) database, licensed
 CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 
+## Browsing a card and installing
+
+- **Open card or folder** lists the photos in a folder (and its subfolders) as a
+  strip of thumbnails, newest first, using the preview each RAW file embeds.
+  The folder is remembered. Needs Chrome or Edge.
+- The site can be installed as an app from the browser's address bar. Once
+  installed, RAW files can be opened in it from the file manager.
+
 ## Shortcuts
 
 `Ctrl+O` open, `Ctrl+E` export, `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo,
 `\` before/after, `R` crop, `W` white balance picker, `J` clipping warning,
-`F` fit, `1` 100%. With a brush selected: `[` `]` size, `X` erase, hold `Space` to pan. Double-click a slider's name to reset it.
+`F` fit, `1` 100%, left and right arrows for the previous and next photo in the strip. With a brush selected: `[` `]` size, `X` erase, hold `Space` to pan. Double-click a slider's name to reset it.
 
 ## Not built yet
 

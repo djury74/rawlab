@@ -10,6 +10,7 @@ import { hitTest, cursorFor, dragRect, drawCrop } from './ui/crop.js';
 import { initLocals } from './ui/locals.js';
 import { LENS_PROFILES, detectProfile, activeProfile, lensParams } from './lens.js';
 import { withExif, tiff16, tiff16Size } from './export.js';
+import { initBrowser } from './ui/browser.js';
 
 const $ = (id) => document.getElementById(id);
 const DEF = defaults();
@@ -82,6 +83,7 @@ async function openFile(file) {
     setTool('none');
     commit(restored ? 'Open (previous edits restored)' : 'Open');
     $('empty').hidden = true;
+    browser.setCurrent(source);
     $('fileName').textContent = `${source.name}  ·  ${source.width} × ${source.height}`;
     const i = source.info;
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
@@ -99,6 +101,31 @@ async function openFile(file) {
 
 $('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
 for (const id of ['btnOpen', 'btnOpen2']) $(id).addEventListener('click', () => $('fileInput').click());
+
+/* ---------- photo browser ---------- */
+
+const browser = initBrowser({
+  node: $('strip'), openFile, toast,
+  hasEdits: (file) => { try { return !!localStorage.getItem(editKey(file)); } catch { return false; } },
+});
+// The top bar button goes straight back to the remembered folder when there is one.
+$('btnFolder').addEventListener('click', () => browser.reopen());
+$('btnFolder2').addEventListener('click', () => browser.pickFolder());
+$('btnReopen').addEventListener('click', () => browser.reopen());
+for (const id of ['btnFolder', 'btnFolder2']) $(id).hidden = !browser.supported;
+window.rawlab.browser = browser;
+browser.rememberedName().then((name) => {
+  if (!name || !browser.supported) return;
+  $('btnReopen').textContent = `Open "${name}"`;
+  $('btnReopen').hidden = false;
+});
+
+// When installed as an app, photos opened from File Explorer arrive here.
+window.launchQueue?.setConsumer(async (params) => {
+  if (!params.files?.length) return;
+  if (params.files.length > 1) await browser.show(params.files, 'Opened photos');
+  openFile(await params.files[0].getFile());
+});
 window.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragover'); });
 window.addEventListener('dragleave', () => stage.classList.remove('dragover'));
 window.addEventListener('drop', (e) => {
@@ -210,6 +237,7 @@ function restore(index) {
 function persist() {
   if (!state.source) return;
   try { localStorage.setItem(editKey(state.source), JSON.stringify(state.settings)); } catch { /* storage full or blocked */ }
+  browser.refreshEdited();
 }
 
 function refreshHistory() {
@@ -910,6 +938,7 @@ window.addEventListener('keydown', (e) => {
     if (k === ']') return run(() => locals.resizeBrush(1.15));
     if (k === 'x') return run(() => locals.toggleErase());
   }
+  if ((k === 'arrowleft' || k === 'arrowright') && !e.target.matches('input')) return run(() => browser.step(k === 'arrowright' ? 1 : -1));
   if (k === '\\') run(() => $('btnBefore').click());
   else if (k === 'r') run(() => $('btnCrop').click());
   else if (k === 'j') run(() => $('btnClip').click());

@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Duncan's Photo Lab</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#222222">
   <link rel="stylesheet" href="./src/style.css">
 </head>
 <body>
 <div id="app">
   <header id="topbar">
     <strong class="brand">Duncan's Photo Lab</strong>
-    <button id="btnOpen" class="primary">Open…</button>
+    <button id="btnOpen" class="primary" title="Open one photo (Ctrl+O)">Open…</button>
+    <button id="btnFolder" title="Browse a folder or camera card">Open card or folder…</button>
     <span id="fileName" class="filename"></span>
     <span class="spacer"></span>
     <div class="group" role="group" aria-label="History">
@@ -61,7 +64,11 @@
     <div id="empty">
       <h1>Open a photo to start</h1>
       <p>Drop a RAW file here (NEF, CR2, CR3, ARW, RAF, DNG and others) or a JPEG or PNG.</p>
-      <button id="btnOpen2" class="primary big">Choose a file…</button>
+      <div class="start">
+        <button id="btnReopen" class="primary big" hidden></button>
+        <button id="btnFolder2" class="big">Browse a card or folder…</button>
+        <button id="btnOpen2" class="big">Choose one file…</button>
+      </div>
       <p class="fine">Files are decoded and edited on this computer. Nothing is uploaded.</p>
     </div>
     <div id="busy" hidden><div class="spinner"></div><span id="busyText">Decoding…</span></div>
@@ -69,6 +76,8 @@
     <div id="beforeTag" hidden>Before</div>
     <div id="toast" hidden role="status"></div>
   </main>
+
+  <section id="strip" hidden aria-label="Photos in the open folder"></section>
 
   <aside id="right">
     <canvas id="hist" width="512" height="200" aria-label="Histogram"></canvas>
