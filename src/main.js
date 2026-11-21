@@ -8,6 +8,7 @@ import { curveEditor } from './ui/curve.js';
 import { drawHistogram } from './ui/histogram.js';
 import { hitTest, cursorFor, dragRect, drawCrop } from './ui/crop.js';
 import { initLocals } from './ui/locals.js';
+import { LENS_PROFILES, detectProfile, activeProfile, lensParams } from './lens.js';
 
 const $ = (id) => document.getElementById(id);
 const DEF = defaults();
@@ -101,9 +102,11 @@ function whiteBalance(s) {
   return wbGains(a, s.temp ?? a.temp, s.tint ?? a.tint);
 }
 
+const lensNow = () => lensParams(state.settings.lens, state.source?.shot);
+
 function beforeSettings() {
   const s = defaults(), c = state.settings;
-  s.crop = clone(c.crop); s.rot = c.rot; s.flipH = c.flipH; s.flipV = c.flipV;
+  s.crop = clone(c.crop); s.rot = c.rot; s.flipH = c.flipH; s.flipV = c.flipV; s.lens = clone(c.lens);
   return s;
 }
 
@@ -146,7 +149,7 @@ function render() {
   const af = currentAffine(g, w, h);
   state.g = g; state.af = af;
   locals.syncMasks();
-  renderer.render({ settings: s, wb: whiteBalance(s), g, af, w, h, clip: state.clip && !state.showBefore, maskCrop: state.tool !== 'crop', bg: BG, showMask: state.showBefore ? null : locals.shownMask() });
+  renderer.render({ settings: s, wb: whiteBalance(s), g, af, w, h, clip: state.clip && !state.showBefore, maskCrop: state.tool !== 'crop', bg: BG, showMask: state.showBefore ? null : locals.shownMask(), lens: lensNow() });
   drawOverlay();
   $('zoomLabel').textContent = Math.round(state.view.shown * 100) + '%';
   scheduleHistogram();
@@ -163,7 +166,7 @@ function scheduleHistogram() {
     const g = geometry(state.settings, src.width, src.height);
     const k = 256 / Math.max(g.cw, g.ch);
     const w = Math.max(2, Math.round(g.cw * k)), h = Math.max(2, Math.round(g.ch * k));
-    renderer.render({ settings: s, wb: whiteBalance(s), g, af: exportAffine(g, w, h), w, h, dest: 'buffer', slot: 'hist' });
+    renderer.render({ settings: s, wb: whiteBalance(s), g, af: exportAffine(g, w, h), w, h, dest: 'buffer', slot: 'hist', lens: lensNow() });
     drawHistogram($('hist'), renderer.readPixels(w, h));
   }, 60);
 }
@@ -307,7 +310,41 @@ const srcToScreen = (uv) => invertAffine(state.af, state.g.srcToFrame(uv));
 const locals = initLocals({ state, renderer, requestRender, commit, setTool, toast, screenToSrc, srcToScreen });
 $('panels').children[0].after(locals.node);
 
+/* ---------- lens corrections ---------- */
+
+const lensSelect = el('select', { 'aria-label': 'Lens profile', onchange: () => {
+  state.settings.lens.profile = lensSelect.value; refreshAll(); commit('Lens profile: ' + lensSelect.selectedOptions[0].textContent);
+} }, el('option', { value: 'auto' }, 'Automatic'), el('option', { value: 'off' }, 'Off'),
+  LENS_PROFILES.map((p) => el('option', { value: p.id }, p.name)));
+const lensStatus = el('p', { class: 'hint' });
+const caCheck = el('input', { type: 'checkbox', onchange: () => { state.settings.lens.ca = caCheck.checked; requestRender(); commit('Chromatic aberration ' + (caCheck.checked ? 'on' : 'off')); } });
+const L = (label, key) => track(slider({
+  label, min: 0, max: 200, def: 100,
+  get: () => state.settings.lens[key], set: (v) => { state.settings.lens[key] = v ?? 100; },
+  onInput: requestRender, onCommit: (l) => commit('Lens ' + l.toLowerCase()),
+}));
+$('panels').append(section('Lens corrections', [
+  el('div', { class: 'row' }, el('span', {}, 'Profile'), lensSelect), lensStatus,
+  L('Distortion', 'distortion'), L('Vignetting', 'vignetting'),
+  el('label', { class: 'check', style: 'margin-top:6px' }, caCheck, 'Remove chromatic aberration'),
+], false));
+
+function syncLens() {
+  const lens = state.settings.lens, shot = state.source?.shot;
+  lensSelect.value = lens.profile;
+  caCheck.checked = lens.ca;
+  const active = state.source ? activeProfile(lens, shot) : null;
+  if (!state.source) lensStatus.textContent = '';
+  else if (lens.profile === 'off') lensStatus.textContent = 'No lens correction applied.';
+  else if (lens.profile === 'auto') {
+    lensStatus.textContent = detectProfile(shot)
+      ? `Detected and applied: ${active.name}${shot.aperture ? ` at f/${+shot.aperture.toFixed(1)}` : ''}.`
+      : 'No profile matched this lens. Choose one above if you know which lens was used.';
+  } else lensStatus.textContent = `Applied: ${active?.name}${shot?.aperture ? ` at f/${+shot.aperture.toFixed(1)}` : ' (aperture unknown, using wide open)'}.`;
+}
+
 function syncSelects() {
+  syncLens();
   const s = state.settings;
   profileSelect.value = s.profile;
   bwCheck.checked = s.bw;
@@ -660,7 +697,7 @@ async function renderFull(onProgress) {
       const x0 = Math.max(0, tx - PAD), y0 = Math.max(0, ty - PAD);
       const x1 = Math.min(ow, tx + TILE + PAD), y1 = Math.min(oh, ty + TILE + PAD);
       const w = x1 - x0, h = y1 - y0;
-      renderer.render({ settings: s, wb, g, af: exportAffine(g, ow, oh, x0, y0), w, h, dest: 'buffer', slot: 'export' });
+      renderer.render({ settings: s, wb, g, af: exportAffine(g, ow, oh, x0, y0), w, h, dest: 'buffer', slot: 'export', lens: lensNow() });
       const img = new ImageData(renderer.readPixels(w, h), w, h);
       ctx.putImageData(img, x0, y0, tx - x0, ty - y0, Math.min(TILE, ow - tx), Math.min(TILE, oh - ty));
       onProgress?.(++done / total);

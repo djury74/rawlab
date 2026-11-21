@@ -36,6 +36,7 @@ async function loadRaw(file) {
       kind: 'raw', name: file.name, size: file.size, width, height, data,
       asShot: asShot || { temp: 5500, tint: 0 }, asShotKnown: !!asShot,
       info: describe(meta),
+      shot: shotInfo(meta),
       sample(x, y, r = 2) {
         const acc = [0, 0, 0]; let n = 0;
         for (let j = Math.max(0, y - r); j <= Math.min(height - 1, y + r); j++) {
@@ -63,6 +64,7 @@ async function loadBitmap(file) {
     kind: 'bitmap', name: file.name, size: file.size, width, height, bitmap,
     asShot: { temp: 5500, tint: 0 }, asShotKnown: false,
     info: { camera: 'Rendered image (not RAW)', lens: '', exposure: '' },
+    shot: null,
     sample(x, y) {
       probe.clearRect(0, 0, 5, 5);
       probe.drawImage(bitmap, x - 2, y - 2, 5, 5, 0, 0, 5, 5);
@@ -71,6 +73,19 @@ async function loadBitmap(file) {
       for (let i = 0; i < d.length; i += 4) { acc[0] += lin(d[i]); acc[1] += lin(d[i + 1]); acc[2] += lin(d[i + 2]); }
       return acc.map((v) => v / 25);
     },
+  };
+}
+
+// Numbers the lens profiles need to recognise the lens and pick calibration data.
+function shotInfo(meta) {
+  const lens = meta.lens || {}, mk = lens.makernotes || {};
+  const first = (...v) => v.find((n) => n > 0) || 0;
+  return {
+    make: meta.camera_make || '', model: meta.camera_model || '',
+    lensName: (lens.Lens || mk.Lens || '').trim(),
+    aperture: meta.aperture || 0, focal: meta.focal_len || 0,
+    minFocal: first(lens.MinFocal, mk.MinFocal), maxFocal: first(lens.MaxFocal, mk.MaxFocal),
+    maxAperture: first(lens.MaxAp4MinFocal, mk.MaxAp, lens.EXIF_MaxAp),
   };
 }
 

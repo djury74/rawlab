@@ -29,13 +29,30 @@ export const FRAG_GEOM = `#version 300 es
 precision highp float;
 uniform sampler2D uSrc;
 uniform vec2 uO, uX, uY;
+uniform bool uLens;
+uniform vec2 uSize;        // source size in pixels
+uniform vec3 uDist;        // ptlens a, b, c
+uniform vec2 uTca;         // red and blue magnification
+uniform vec3 uVig;         // k1, k2, k3
 in vec2 vT;
 out vec4 o;
 void main() {
   vec2 p = vec2(vT.x, 1.0 - vT.y);
   vec2 uv = uO + p.x * uX + p.y * uY;
   vec2 in2 = step(vec2(0.0), uv) * step(uv, vec2(1.0));
-  o = vec4(texture(uSrc, uv).rgb, in2.x * in2.y);
+  vec3 c;
+  if (uLens) {
+    // uv is the corrected position; find where the lens actually put that point.
+    vec2 d = (uv - 0.5) * uSize;
+    float ru = length(d) / (0.5 * min(uSize.x, uSize.y));
+    d *= ((uDist.x * ru + uDist.y) * ru + uDist.z) * ru + 1.0 - uDist.x - uDist.y - uDist.z;
+    c = vec3(texture(uSrc, 0.5 + d * uTca.x / uSize).r, texture(uSrc, 0.5 + d / uSize).g, texture(uSrc, 0.5 + d * uTca.y / uSize).b);
+    float r2 = dot(d, d) / (0.25 * dot(uSize, uSize));
+    c /= max(1.0 + r2 * (uVig.x + r2 * (uVig.y + r2 * uVig.z)), 0.25);
+  } else {
+    c = texture(uSrc, uv).rgb;
+  }
+  o = vec4(c, in2.x * in2.y);
 }`;
 
 export const FRAG_BLUR = `#version 300 es

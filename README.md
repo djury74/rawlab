@@ -30,6 +30,14 @@ because the decoder runs in a worker.
 - `src/main.js` holds application state, history, view, crop tool and export.
   Export renders the same pipeline at full size in tiles.
 
+## Lens corrections
+
+`src/lens.js` holds lens profiles (distortion, lateral chromatic aberration,
+vignetting by aperture) and applies them when the file's metadata matches.
+One profile is included: Nikon AF-S DX Nikkor 35mm f/1.8G. Its calibration
+values come from the [lensfun](https://lensfun.github.io) database, licensed
+CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
+
 ## Shortcuts
 
 `Ctrl+O` open, `Ctrl+E` export, `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo,
@@ -38,6 +46,6 @@ because the decoder runs in a worker.
 
 ## Not built yet
 
-Healing, lens corrections, highlight
+Healing, lens profiles beyond the one below, highlight
 reconstruction beyond the sensor clip point, 16-bit TIFF export, embedded
 colour profiles other than sRGB, and a multi-image library.

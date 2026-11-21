@@ -165,16 +165,18 @@ export class Renderer {
   }
 
   // Low-resolution blurred copy of the whole frame, used for local tone and clarity.
-  #updateBlur(g, s) {
+  #updateBlur(g, s, lens) {
     const gl = this.gl;
-    const key = [this.src.id, s.rot, s.flipH, s.flipV].join();
+    const key = [this.src.id, s.rot, s.flipH, s.flipV, JSON.stringify(lens)].join();
     const k = BLUR_EDGE / Math.max(g.Wf, g.Hf);
     const bw = Math.max(8, Math.round(g.Wf * k)), bh = Math.max(8, Math.round(g.Hf * k));
     const a = this.#target('blurA', bw, bh), b = this.#target('blurB', bw, bh);
     if (key === this.blurKey) return a;
     const af = { A: [0, 0], U: [g.Wf / bw, 0], V: [0, g.Hf / bh] };
-    this.#draw(this.progs.geom, a.tex, bw, bh, { uSrc: this.src.tex }, (gl, u) =>
-      this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, bw, bh, g.frameToSrc));
+    this.#draw(this.progs.geom, a.tex, bw, bh, { uSrc: this.src.tex }, (gl, u) => {
+      this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, bw, bh, g.frameToSrc);
+      this.#lensUniforms(gl, u, lens);
+    });
     this.#draw(this.progs.blur, b.tex, bw, bh, { uTex: a.tex }, (gl, u) => gl.uniform2f(u.uDir, 1 / bw, 0));
     this.#draw(this.progs.blur, a.tex, bw, bh, { uTex: b.tex }, (gl, u) => gl.uniform2f(u.uDir, 0, 1 / bh));
     this.blurKey = key;
@@ -197,16 +199,18 @@ export class Renderer {
    *  w, h    target size
    *  dest    'canvas' or 'buffer' (RGBA8, read back with readPixels)
    */
-  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null }) {
+  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null, lens = null }) {
     if (!this.src) return;
     const gl = this.gl;
     const px = 1 / Math.hypot(af.U[0], af.U[1]);
-    const blur = this.#updateBlur(g, s);
+    const blur = this.#updateBlur(g, s, lens);
     this.#updateCurve(s.curve);
 
     let view = this.#target(slot + ':viewA', w, h);
-    this.#draw(this.progs.geom, view.tex, w, h, { uSrc: this.src.tex }, (gl, u) =>
-      this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, w, h, g.frameToSrc));
+    this.#draw(this.progs.geom, view.tex, w, h, { uSrc: this.src.tex }, (gl, u) => {
+      this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, w, h, g.frameToSrc);
+      this.#lensUniforms(gl, u, lens);
+    });
 
     if ((s.nrLuma > 0 || s.nrColor > 0) && px > 0.4) {
       const out = this.#target(slot + ':viewB', w, h);
@@ -260,6 +264,16 @@ export class Renderer {
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.maskTex);
       gl.uniform1i(u.uLMask, 7);
     });
+  }
+
+  // lens: { dist: [a, b, c], tca: [kr, kb], vig: [k1, k2, k3] } or null
+  #lensUniforms(gl, u, lens) {
+    gl.uniform1i(u.uLens, lens ? 1 : 0);
+    if (!lens) return;
+    gl.uniform2f(u.uSize, this.src.w, this.src.h);
+    gl.uniform3fv(u.uDist, lens.dist);
+    gl.uniform2fv(u.uTca, lens.tca);
+    gl.uniform3fv(u.uVig, lens.vig);
   }
 
   #localUniforms(gl, u, s, showMask) {
