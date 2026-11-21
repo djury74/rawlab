@@ -117,7 +117,7 @@ void main() {
 
 export const FRAG_DEVELOP = `#version 300 es
 precision highp float;
-uniform sampler2D uView, uBlur, uCurve;
+uniform sampler2D uView, uBlur, uCurve, uBase;
 uniform vec2 uTexel;
 uniform float uPx;                 // target pixels per image pixel
 uniform vec2 uFO, uFX, uFY;        // target uv -> frame uv
@@ -262,15 +262,20 @@ void main() {
 
   bool clipHi = max(max(c.r, c.g), c.b) >= 1.0;
   bool clipLo = max(max(c.r, c.g), c.b) <= 0.0;
-  vec3 v = oetf(clamp(c, 0.0, 1.0));
+  c = clamp(c, 0.0, 1.0);
 
-  // Camera-style base rendering.
-  if (uProfile == 0) {
-    v = mix(v, v * v * (3.0 - 2.0 * v), 0.3);
-  } else if (uProfile == 1) {
-    v = mix(v, v * v * (3.0 - 2.0 * v), 0.5);
+  // Camera-style base rendering: sensor data is linear and looks dark and flat
+  // without the tone curve every camera applies to its own JPEGs. The curve is
+  // applied per channel, which also restores the colour saturation.
+  if (uProfile != 2) {
+    vec3 bc = sqrt(c) * (1023.0 / 1024.0) + 0.5 / 1024.0;
+    c = vec3(texture(uBase, vec2(bc.r, 0.5)).r, texture(uBase, vec2(bc.g, 0.5)).r, texture(uBase, vec2(bc.b, 0.5)).r);
+  }
+  vec3 v = oetf(c);
+  if (uProfile != 2) {
+    if (uProfile == 1) v = mix(v, v * v * (3.0 - 2.0 * v), 0.3);
     float l = dot(v, LUM);
-    v = clamp(mix(vec3(l), v, 1.2), 0.0, 1.0);
+    v = clamp(mix(vec3(l), v, uProfile == 1 ? 1.3 : 1.1), 0.0, 1.0);
   }
 
   float contrast = uContrast + l1.y;

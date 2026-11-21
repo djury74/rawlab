@@ -1,5 +1,5 @@
 import * as S from './shaders.js';
-import { buildCurveLUT, hsvToRgb, wbGains } from '../color.js';
+import { buildCurveLUT, buildBaseLUT, hsvToRgb, wbGains } from '../color.js';
 import { applyAffine } from '../geometry.js';
 
 const PROFILES = { standard: 0, vivid: 1, linear: 2 };
@@ -36,6 +36,8 @@ export class Renderer {
     this.src = null;
     this.curveTex = this.#texture(gl.LINEAR);
     this.curveKey = null;
+    this.baseTex = this.#texture(gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1024, 1, 0, gl.RGBA, gl.FLOAT, buildBaseLUT());
     this.blurKey = null;
     this.maskTex = gl.createTexture();
     this.maskSize = { w: 1, h: 1 };
@@ -228,7 +230,7 @@ export class Renderer {
       const l = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
       return rgb.map((v) => (v - l) * (sat / 100) * 0.35);
     };
-    this.#draw(this.progs.develop, target, w, h, { uView: view.tex, uBlur: blur.tex, uCurve: this.curveTex }, (gl, u) => {
+    this.#draw(this.progs.develop, target, w, h, { uView: view.tex, uBlur: blur.tex, uCurve: this.curveTex, uBase: this.baseTex }, (gl, u) => {
       gl.uniform2f(u.uTexel, 1 / w, 1 / h);
       gl.uniform1f(u.uPx, px);
       this.#affineUniforms(gl, u, ['uFO', 'uFX', 'uFY'], af, w, h, (p) => [p[0] / g.Wf, p[1] / g.Hf]);
