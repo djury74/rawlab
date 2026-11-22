@@ -4,6 +4,8 @@ import { applyAffine } from '../geometry.js';
 
 const PROFILES = { standard: 0, vivid: 1, linear: 2 };
 const BLUR_EDGE = 320;
+const GUIDE_STEP = 2;      // widens the guided filter's window to about 2% of the frame
+const GUIDE_EPS = 0.004;   // brightness differences well above sqrt(eps) count as edges
 const MASK_EDGE = 1280;
 export const MAX_LOCALS = 8;
 
@@ -24,6 +26,9 @@ export class Renderer {
       blur: this.#program(S.FRAG_BLUR),
       denoise: this.#program(S.FRAG_DENOISE),
       develop: this.#program(S.FRAG_DEVELOP),
+      gfPrep: this.#program(S.FRAG_GF_PREP),
+      gfDiff: this.#program(S.FRAG_GF_DIFF),
+      gfCoef: this.#program(S.FRAG_GF_COEF),
     };
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -167,23 +172,39 @@ export class Renderer {
   }
 
   // Low-resolution blurred copy of the whole frame, used for local tone and clarity.
+  // Low-resolution helpers covering the whole frame, rebuilt only when the
+  // image content changes: a blurred copy (clarity, dehaze) and the guided
+  // filter coefficients (shadows and highlights).
   #updateBlur(g, s, lens) {
     const gl = this.gl;
     const key = [this.src.id, s.rot, s.flipH, s.flipV, JSON.stringify(lens), JSON.stringify(s.spots || [])].join();
     const k = BLUR_EDGE / Math.max(g.Wf, g.Hf);
     const bw = Math.max(8, Math.round(g.Wf * k)), bh = Math.max(8, Math.round(g.Hf * k));
-    const a = this.#target('blurA', bw, bh), b = this.#target('blurB', bw, bh);
-    if (key === this.blurKey) return a;
+    const T = (name) => this.#target(name, bw, bh);
+    const small = T('lowSrc'), a = T('blurA'), b = T('blurB'), t1 = T('gf1'), t2 = T('gf2'), guide = T('guide');
+    const out = { blur: a, guide };
+    if (key === this.blurKey) return out;
     const af = { A: [0, 0], U: [g.Wf / bw, 0], V: [0, g.Hf / bh] };
-    this.#draw(this.progs.geom, a.tex, bw, bh, { uSrc: this.src.tex }, (gl, u) => {
+    this.#draw(this.progs.geom, small.tex, bw, bh, { uSrc: this.src.tex }, (gl, u) => {
       this.#affineUniforms(gl, u, ['uO', 'uX', 'uY'], af, bw, bh, g.frameToSrc);
       this.#lensUniforms(gl, u, lens);
       this.#spotUniforms(gl, u, s.spots);
     });
-    this.#draw(this.progs.blur, b.tex, bw, bh, { uTex: a.tex }, (gl, u) => gl.uniform2f(u.uDir, 1 / bw, 0));
-    this.#draw(this.progs.blur, a.tex, bw, bh, { uTex: b.tex }, (gl, u) => gl.uniform2f(u.uDir, 0, 1 / bh));
+    // Blur `from` into `to`, using `via` as scratch. `step` widens the blur.
+    const blur = (from, via, to, step = 1) => {
+      this.#draw(this.progs.blur, via.tex, bw, bh, { uTex: from.tex }, (gl, u) => gl.uniform2f(u.uDir, step / bw, 0));
+      this.#draw(this.progs.blur, to.tex, bw, bh, { uTex: via.tex }, (gl, u) => gl.uniform2f(u.uDir, 0, step / bh));
+    };
+    blur(small, b, a);
+    // Guided filter: local mean, local variance, line fit, then smooth the fit.
+    this.#draw(this.progs.gfPrep, t1.tex, bw, bh, { uImg: small.tex });
+    blur(t1, t2, guide, GUIDE_STEP);                                   // guide = local mean
+    this.#draw(this.progs.gfDiff, t1.tex, bw, bh, { uImg: small.tex, uMean: guide.tex });
+    blur(t1, t2, guide, GUIDE_STEP);                                   // guide = (variance, mean)
+    this.#draw(this.progs.gfCoef, t1.tex, bw, bh, { uStat: guide.tex }, (gl, u) => gl.uniform1f(u.uEps, GUIDE_EPS));
+    blur(t1, t2, guide, GUIDE_STEP);                                   // guide = smoothed (a, b)
     this.blurKey = key;
-    return a;
+    return out;
   }
 
   #updateCurve(curve) {
@@ -206,7 +227,7 @@ export class Renderer {
     if (!this.src) return;
     const gl = this.gl;
     const px = 1 / Math.hypot(af.U[0], af.U[1]);
-    const blur = this.#updateBlur(g, s, lens);
+    const { blur, guide } = this.#updateBlur(g, s, lens);
     this.#updateCurve(s.curve);
 
     let view = this.#target(slot + ':viewA', w, h);
@@ -234,7 +255,7 @@ export class Renderer {
       const l = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
       return rgb.map((v) => (v - l) * (sat / 100) * 0.35);
     };
-    this.#draw(this.progs.develop, target, w, h, { uView: view.tex, uBlur: blur.tex, uCurve: this.curveTex, uBase: this.baseTex }, (gl, u) => {
+    this.#draw(this.progs.develop, target, w, h, { uView: view.tex, uBlur: blur.tex, uGuide: guide.tex, uCurve: this.curveTex, uBase: this.baseTex }, (gl, u) => {
       if (!target && x) gl.viewport(x, 0, w, h);          // draw into part of the canvas (side-by-side view)
       gl.uniform2f(u.uTexel, 1 / w, 1 / h);
       gl.uniform1f(u.uPx, px);

@@ -38,6 +38,11 @@ and file layout. This file records what is not obvious from the code.
   sets exposure automatically on first open (`toneStats` in `src/decode.js`,
   target tuned against a D5100 photo). The Standard base curve in
   `src/color.js` is a generic camera-like curve; do not refit it to one photo.
+- **Shadows and Highlights are edge-aware.** They use a guided filter built at
+  low resolution in `#updateBlur` (`src/gl/renderer.js`) and evaluated per
+  pixel in the develop shader. A plain blur left halos at hard edges. To check
+  for halos, render a hard bright/dark edge with Highlights -100 and Shadows
+  +100 and look at the brightness profile across it.
 - **Settings version.** `version: 2` in `src/settings.js` marks edits made on
   true linear data. Older saved edits are discarded on open. Bump it only if
   rendering changes enough to invalidate existing edits.

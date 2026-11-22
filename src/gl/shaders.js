@@ -108,6 +108,35 @@ void main() {
   o = vec4(acc / wsum, 1.0);
 }`;
 
+// Edge-aware smoothing of brightness (a guided filter), used to decide which
+// parts of the photo count as shadow or highlight. Unlike a plain blur it
+// follows hard edges, so lifting shadows or pulling highlights does not leave
+// a glow along the boundary between a bright sky and a dark subject.
+// Brightness is handled as sqrt(luminance), which is roughly perceptual.
+const GF_HEAD = `#version 300 es
+precision highp float;
+in vec2 vT;
+out vec4 o;
+const vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
+float bright(sampler2D t) { return sqrt(max(dot(texture(t, vT).rgb, LUM), 0.0)); }
+`;
+// r = brightness
+export const FRAG_GF_PREP = GF_HEAD + `uniform sampler2D uImg;
+void main() { o = vec4(bright(uImg), 0.0, 0.0, 1.0); }`;
+// r = squared difference from the local mean, g = local mean
+export const FRAG_GF_DIFF = GF_HEAD + `uniform sampler2D uImg, uMean;
+void main() { float m = texture(uMean, vT).r, d = bright(uImg) - m; o = vec4(d * d, m, 0.0, 1.0); }`;
+// Per-area line fit: smoothed = a * brightness + b. Where an area contains a
+// strong edge (high variance) a is near 1 and the edge is kept; where it is
+// flat or finely textured a is near 0 and the area is averaged.
+export const FRAG_GF_COEF = GF_HEAD + `uniform sampler2D uStat;
+uniform float uEps;
+void main() {
+  vec2 s = texture(uStat, vT).rg;
+  float a = s.r / (s.r + uEps);
+  o = vec4(a, s.g * (1.0 - a), 0.0, 1.0);
+}`;
+
 // Edge-preserving luminance smoothing plus wider chroma smoothing.
 export const FRAG_DENOISE = `#version 300 es
 precision highp float;
@@ -154,7 +183,7 @@ void main() {
 
 export const FRAG_DEVELOP = `#version 300 es
 precision highp float;
-uniform sampler2D uView, uBlur, uCurve, uBase;
+uniform sampler2D uView, uBlur, uGuide, uCurve, uBase;
 uniform vec2 uTexel;
 uniform float uPx;                 // target pixels per image pixel
 uniform vec2 uFO, uFX, uFY;        // target uv -> frame uv
@@ -260,6 +289,7 @@ void main() {
   }
 
   // White balance and exposure, in linear light.
+  float L0 = max(dot(c, LUM), 1e-6);                 // brightness before any adjustment
   vec3 ev = uWB * lWB * exp2(uExposure + l1.x);
   c *= ev;
   b *= ev;
@@ -277,7 +307,10 @@ void main() {
   // Shadows and highlights: local exposure driven by the blurred image.
   float L = max(dot(c, LUM), 1e-5);
   float Lb = max(dot(b, LUM), 1e-5);
-  float mb = sqrt(clamp(Lb, 0.0, 1.0));
+  // Edge-aware estimate of the surrounding brightness: the line fit from the
+  // guided filter, evaluated on this pixel and carried through the changes above.
+  vec2 gf = texture(uGuide, vec2(fuv.x, 1.0 - fuv.y)).rg;
+  float mb = clamp((gf.r * sqrt(L0) + gf.g) * sqrt(L / L0), 0.0, 1.0);
   float ws = 1.0 - smoothstep(0.0, 0.55, mb);
   float wh = smoothstep(0.4, 1.0, mb);
   float gain = exp2((uShadows + l1.w) * 1.6 * ws * ws + (uHighlights + l1.z) * 1.4 * wh);
