@@ -17,7 +17,7 @@ export function defaults() {
     bw: false,
     temp: null, tint: null,   // null = as shot
     exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0,
-    clarity: 0, dehaze: 0, vibrance: 0, saturation: 0,
+    texture: 0, clarity: 0, dehaze: 0, vibrance: 0, saturation: 0,
     curve: { rgb: identityCurve(), r: identityCurve(), g: identityCurve(), b: identityCurve() },
     hsl: { hue: zeros8(), sat: zeros8(), lum: zeros8() },
     grade: { shHue: 220, shSat: 0, hiHue: 40, hiSat: 0, balance: 0 },
@@ -60,6 +60,50 @@ export function applyLook(target, look) {
   const merged = normalise({ ...clone(target), ...clone(look) });
   for (const k of GEOMETRY_KEYS) merged[k] = clone(target[k]);
   return merged;
+}
+
+// Allowed range of each numeric setting, for anything that computes values.
+const RANGES = {
+  exposure: [-5, 5], sharpen: [0, 150], sharpRadius: [0.5, 3], nrLuma: [0, 100], nrColor: [0, 100],
+  vigMid: [0, 100], vigFeather: [0, 100], grain: [0, 100], grainSize: [0, 100],
+  shSat: [0, 100], hiSat: [0, 100],
+};
+const HUES = new Set(['shHue', 'hiHue']);
+
+// A look part-way between `from` and `to` (both complete settings). `k` is 0 for
+// `from`, 1 for `to`, and may go to 2 to exaggerate. Numbers are interpolated and
+// kept within their slider ranges; curve points are scaled away from the
+// starting curve; choices such as profile and black-and-white switch at k > 0.
+export function blendLook(from, to, k) {
+  const walk = (a, b, key) => {
+    if (typeof b === 'number' && typeof a === 'number') {
+      if (HUES.has(key)) return k > 0 ? b : a;
+      const [lo, hi] = RANGES[key] || [-100, 100];
+      const v = a + (b - a) * k;
+      return Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100;
+    }
+    if (Array.isArray(b)) {
+      if (Array.isArray(a) && a.length === b.length && b.every((v) => typeof v === 'number')) return b.map((v, i) => walk(a[i], v, key));
+      return b;
+    }
+    if (b && typeof b === 'object' && a && typeof a === 'object') {
+      const out = {};
+      for (const kk of Object.keys(b)) out[kk] = walk(a[kk], b[kk], kk);
+      return out;
+    }
+    return k > 0 ? b : a;
+  };
+  const out = walk(from, to);
+  // Tone curves: move each point of the target curve towards or beyond where
+  // the starting curve puts it. Only when the starting curve is the straight line.
+  for (const ch of ['rgb', 'r', 'g', 'b']) {
+    const a = from.curve[ch], b = to.curve[ch];
+    const straight = a.length === 2 && a[0][0] === 0 && a[0][1] === 0 && a[1][0] === 1 && a[1][1] === 1;
+    if (straight) out.curve[ch] = b.map(([x, y]) => [x, Math.min(1, Math.max(0, x + (y - x) * k))]);
+    else out.curve[ch] = clone(k > 0 ? b : a);
+  }
+  for (const key of GEOMETRY_KEYS) out[key] = clone(to[key]);
+  return out;
 }
 
 const S = (pts) => pts;

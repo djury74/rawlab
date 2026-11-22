@@ -81,6 +81,7 @@ export function initBrowser({ node, openFile, toast, hasEdits, rating }) {
       ctx.drawImage(bitmap, -w / 2, -h / 2, w, h);
       bitmap.close();
       item.img.replaceChildren(c);
+      item.thumb = c;
       item.li.classList.toggle('edited', hasEdits(item.file));
     } catch {
       item.img.replaceChildren(el('span', { class: 'nothumb' }, 'No preview'));
@@ -163,6 +164,8 @@ export function initBrowser({ node, openFile, toast, hasEdits, rating }) {
     rememberedName: async () => (await remembered())?.name || null,
     setCurrent: (file) => { current = file; markCurrent(); },
     refreshRatings: applyFilter,
+    // The strip's small picture of a file, if it has been made yet.
+    thumbFor: (file) => items.find((i) => i.thumb && i.name === file.name && i.file?.size === file.size)?.thumb || null,
     refreshEdited: () => { for (const i of items) if (i.file) i.li.classList.toggle('edited', hasEdits(i.file)); },
     step: (d) => {                      // open the next or previous photo in the strip
       const visible = items.filter((i) => !i.li.hidden || i.li.classList.contains('current'));

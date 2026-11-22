@@ -21,6 +21,25 @@ for (let i = 0; i < 65536; i++) {
   LINEAR[i] = v < 0.081 ? v / 4.5 : ((v + 0.099) / 1.099) ** (1 / 0.45);
 }
 
+// The JPEG preview a camera embeds in its RAW files, for showing something at
+// once while the photo is developed. Returns { bitmap, flip } or null.
+let previewDecoder = null;
+export async function rawPreview(file, maxEdge = 2400) {
+  if (BITMAP_TYPES.test(file.name)) return null;
+  try {
+    previewDecoder ||= new LibRaw();
+    await previewDecoder.open(new Uint8Array(await file.arrayBuffer()), {});
+    const meta = await previewDecoder.metadata(false);
+    const thumb = await previewDecoder.thumbnailData();
+    if (!thumb?.data || thumb.format !== 'jpeg') return null;
+    const blob = new Blob([thumb.data], { type: 'image/jpeg' });
+    const bitmap = await createImageBitmap(blob, thumb.width > maxEdge ? { resizeWidth: maxEdge } : undefined);
+    return { bitmap, flip: meta?.flip || 0 };
+  } catch {
+    return null;
+  }
+}
+
 async function loadRaw(file) {
   const buffer = await file.arrayBuffer();
   const raw = new LibRaw();

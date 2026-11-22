@@ -223,7 +223,7 @@ export class Renderer {
    *  w, h    target size
    *  dest    'canvas' or 'buffer' (RGBA8, read back with readPixels)
    */
-  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null, lens = null, x = 0 }) {
+  render({ settings: s, wb, g, af, w, h, dest = 'canvas', clip = false, maskCrop = false, bg = [0, 0, 0], slot = 'main', showMask = null, lens = null, x = 0, showSpots = false }) {
     if (!this.src) return;
     const gl = this.gl;
     const px = 1 / Math.hypot(af.U[0], af.U[1]);
@@ -264,12 +264,13 @@ export class Renderer {
       gl.uniform2f(u.uCropPx, g.cw, g.ch);
       gl.uniform3fv(u.uWB, wb);
       gl.uniform1f(u.uExposure, s.exposure);
-      for (const k of ['Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Clarity', 'Dehaze', 'Vibrance', 'Saturation']) {
+      for (const k of ['Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Texture', 'Clarity', 'Dehaze', 'Vibrance', 'Saturation']) {
         gl.uniform1f(u['u' + k], s[k.toLowerCase()] / 100);
       }
       gl.uniform1i(u.uProfile, PROFILES[s.profile] ?? 0);
       gl.uniform1i(u.uBW, s.bw ? 1 : 0);
       gl.uniform1i(u.uClip, clip ? 1 : 0);
+      gl.uniform1i(u.uShowSpots, showSpots ? 1 : 0);
       gl.uniform1i(u.uMaskCrop, maskCrop ? 1 : 0);
       gl.uniform1fv(u.uHslH, s.hsl.hue.map((v) => v / 100));
       gl.uniform1fv(u.uHslS, s.hsl.sat.map((v) => v / 100));

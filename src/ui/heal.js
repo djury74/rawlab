@@ -10,7 +10,7 @@ const r4 = (v) => Math.round(v * 1e4) / 1e4;
 
 export function initHeal({ node, state, requestRender, commit, setTool, toast, screenToSrc, srcToScreen }) {
   let size = 0.012;            // radius as a fraction of the long edge
-  let selected = -1, drag = null, cursor = null;
+  let selected = -1, drag = null, cursor = null, showSpots = false;
   const spots = () => state.settings.spots;
   const src = () => state.source;
   const longEdge = () => Math.max(src().width, src().height);
@@ -130,13 +130,15 @@ export function initHeal({ node, state, requestRender, commit, setTool, toast, s
     state.settings.spots = []; selected = -1; refresh(); requestRender(); commit('Clear all spots');
   } }, 'Clear all');
   const count = el('span', { class: 'hint', style: 'margin:0' });
-  node.append(sizeSlider.node, removeBtn, clearBtn, count,
+  const spotsBtn = el('button', { type: 'button', title: 'Grey high-contrast view that makes faint dust spots stand out (S)', onclick: () => { showSpots = !showSpots; refresh(); requestRender(); } }, 'Show spots');
+  node.append(sizeSlider.node, spotsBtn, removeBtn, clearBtn, count,
     el('button', { type: 'button', class: 'primary', onclick: () => setTool('none') }, 'Done'));
 
   function refresh() {
     if (selected >= spots().length) selected = -1;
     sizeSlider.refresh();
     removeBtn.disabled = selected < 0;
+    spotsBtn.classList.toggle('on', showSpots);
     clearBtn.disabled = !spots().length;
     const n = spots().length;
     count.textContent = n ? `${n} spot${n === 1 ? '' : 's'}. Drag the dashed circle to change what it copies from.` : 'Click a blemish to remove it.';
@@ -145,6 +147,8 @@ export function initHeal({ node, state, requestRender, commit, setTool, toast, s
   return {
     refresh, draw, pointerDown, pointerMove, pointerUp, remove,
     deselect: () => { selected = -1; refresh(); },
+    showSpots: () => showSpots,
+    toggleSpots: () => spotsBtn.click(),
     resize: (k) => { sizeSlider.node.querySelector('input').value = Math.round(Math.min(60, Math.max(2, size * 1000 * k))); sizeSlider.node.querySelector('input').dispatchEvent(new Event('input')); sizeSlider.node.querySelector('input').dispatchEvent(new Event('change')); },
   };
 }

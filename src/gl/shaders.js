@@ -197,7 +197,8 @@ uniform bool uBW, uClip, uMaskCrop;
 uniform float uHslH[8], uHslS[8], uHslL[8];
 uniform vec3 uGradeSh, uGradeHi;
 uniform float uGradeBal;
-uniform float uSharpen, uSharpRadius;
+uniform float uSharpen, uSharpRadius, uTexture;
+uniform bool uShowSpots;
 uniform float uVig, uVigMid, uVigFeather, uGrain, uGrainSize;
 uniform vec3 uBg;
 uniform float uDither;
@@ -277,6 +278,25 @@ void main() {
     c *= clamp((g1 * g1) / (g0 * g0), 0.25, 4.0);
   }
 
+  // Texture: strengthen (or soften) medium-sized detail such as bark, fabric and
+  // skin. Detail is the difference from a small-area average. Neighbours that
+  // differ strongly from this pixel are on the far side of an edge and are
+  // left out of the average, so edges do not grow halos.
+  if (uTexture != 0.0) {
+    vec2 r = uTexel * 6.0 * uPx;
+    float g0 = sqrt(max(dot(c, LUM), 1e-6));
+    float acc = g0, wsum = 1.0;
+    for (int i = 0; i < 12; i++) {
+      float a = float(i) * 0.5235988;
+      bool far = (i & 1) == 1;
+      float gi = lumaG(vT + vec2(cos(a), sin(a)) * r * (far ? 1.0 : 0.5));
+      float w = (far ? 0.4 : 0.8) * (1.0 - smoothstep(0.05, 0.12, abs(gi - g0)));
+      acc += gi * w; wsum += w;
+    }
+    float g1 = max(g0 + uTexture * 1.6 * (g0 - acc / wsum), 0.0);
+    c *= clamp((g1 * g1) / (g0 * g0), 0.25, 4.0);
+  }
+
   // Accumulate local adjustments into per-pixel offsets of the global controls.
   vec2 suv = uSO + p.x * uSX + p.y * uSY;
   vec4 l1 = vec4(0.0); vec2 l2 = vec2(0.0); vec3 lWB = vec3(1.0); float shown = 0.0;
@@ -315,6 +335,7 @@ void main() {
   float wh = smoothstep(0.4, 1.0, mb);
   float gain = exp2((uShadows + l1.w) * 1.6 * ws * ws + (uHighlights + l1.z) * 1.4 * wh);
   c *= gain; L *= gain; Lb *= gain;
+  float spotDetail = sqrt(L) - sqrt(Lb);
 
   // Clarity: midtone local contrast.
   float clarity = uClarity + l2.x;
@@ -418,6 +439,9 @@ void main() {
   }
 
   v = clamp(v, 0.0, 1.0);
+  // Spot view: exaggerate small differences from the surroundings in grey, so
+  // faint blemishes such as sensor dust stand out.
+  if (uShowSpots) v = vec3(clamp(0.5 + spotDetail * 9.0, 0.0, 1.0));
   if (uClip) {
     if (clipHi) v = vec3(1.0, 0.1, 0.1);
     else if (clipLo) v = vec3(0.1, 0.35, 1.0);

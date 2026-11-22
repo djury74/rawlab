@@ -149,3 +149,9 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 a { color: var(--accent); }
 a.help { flex: none; color: var(--muted); text-decoration: none; padding: 4px 6px; border-radius: 4px; }
 a.help:hover { color: var(--text); background: var(--panel2); }
+
+#busy.over { background: none; place-content: end center; padding-bottom: 18px; pointer-events: none; }
+#busy.over .spinner { display: none; }
+#busy.over span { background: rgba(0,0,0,0.72); padding: 5px 12px; border-radius: 14px; font-size: 12px; }
+#presetAmount { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+#presetAmount .slider { grid-template-columns: 58px 1fr 44px; }

@@ -1,6 +1,6 @@
 import { Renderer } from './gl/renderer.js';
-import { loadImage } from './decode.js';
-import { defaults, clone, normalise, lookOnly, applyLook, HSL_BANDS, BUILTIN_PRESETS } from './settings.js';
+import { loadImage, rawPreview } from './decode.js';
+import { defaults, clone, normalise, lookOnly, applyLook, blendLook, HSL_BANDS, BUILTIN_PRESETS } from './settings.js';
 import { wbGains, neutraliseToTempTint } from './color.js';
 import { geometry, exportAffine, viewAffine, applyAffine, invertAffine, cropFits, fitCropScale } from './geometry.js';
 import { el, slider, section } from './ui/controls.js';
@@ -94,11 +94,42 @@ function freshSettings() {
   return s;
 }
 
+// Show the camera's embedded preview at once while a RAW file is developed.
+const previewCanvas = $('preview'), pctx = previewCanvas.getContext('2d');
+function drawPreview(image, flip) {
+  const dpr = devicePixelRatio, w = Math.round(stage.clientWidth * dpr), h = Math.round(stage.clientHeight * dpr);
+  previewCanvas.width = w; previewCanvas.height = h;
+  const turned = flip === 5 || flip === 6;
+  const iw = turned ? image.height : image.width, ih = turned ? image.width : image.height;
+  const m = 24 * dpr, k = Math.min((w - 2 * m) / iw, (h - 2 * m) / ih);
+  pctx.fillStyle = '#161616'; pctx.fillRect(0, 0, w, h);
+  pctx.save();
+  pctx.translate(w / 2, h / 2);
+  pctx.rotate({ 3: Math.PI, 5: -Math.PI / 2, 6: Math.PI / 2 }[flip] || 0);
+  pctx.imageSmoothingQuality = 'high';
+  pctx.drawImage(image, -image.width * k / 2, -image.height * k / 2, image.width * k, image.height * k);
+  pctx.restore();
+  previewCanvas.hidden = false;
+  $('empty').hidden = true;
+  $('busy').classList.add('over');
+}
+function hidePreview() { previewCanvas.hidden = true; $('busy').classList.remove('over'); }
+
+let openToken = 0;
 async function openFile(file) {
   if (!file) return;
-  busy(`Decoding ${file.name}…`);
+  const token = ++openToken;                 // a newer open supersedes this one
+  busy(`Developing ${file.name}…`);
+  hidePreview();
+  const small = browser.thumbFor(file);      // the strip's thumbnail, if there is one: blurry but immediate
+  if (small) drawPreview(small, 0);
+  rawPreview(file).then((p) => {
+    if (p && token === openToken && $('busy').hidden === false) drawPreview(p.bitmap, p.flip);
+    p?.bitmap.close();
+  });
   try {
     const source = await loadImage(file);
+    if (token !== openToken) return;
     renderer.setSource(source);
     state.source = source;
     let restored = false;
@@ -120,14 +151,16 @@ async function openFile(file) {
     const i = source.info;
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
     refreshAll();
+    render();                                // draw the developed photo before the preview is removed
     if (restored) toast('Previous edits for this file were restored. Use Reset to start again.');
     else if (state.settings.exposure > 0) toast(`Exposure set automatically to +${state.settings.exposure.toFixed(2)}. Choose As shot to see it unadjusted.`);
   } catch (err) {
+    if (token !== openToken) return;
     console.error(err);
     toast(err.message || String(err), true);
+    if (!state.source) $('empty').hidden = false;
   } finally {
-    busy(null);
-    updateButtons();
+    if (token === openToken) { busy(null); hidePreview(); updateButtons(); }
   }
 }
 
@@ -233,7 +266,7 @@ function render() {
   }
   const af = currentAffine(g, w, h);
   state.g = g; state.af = af;
-  renderer.render({ settings: s, wb: whiteBalance(s), g, af, w, h, clip: state.clip && !state.showBefore, maskCrop: state.tool !== 'crop', bg: BG, showMask: state.showBefore ? null : locals.shownMask(), lens: lensNow() });
+  renderer.render({ settings: s, wb: whiteBalance(s), g, af, w, h, clip: state.clip && !state.showBefore, maskCrop: state.tool !== 'crop', bg: BG, showMask: state.showBefore ? null : locals.shownMask(), lens: lensNow(), showSpots: state.tool === 'heal' && heal.showSpots() && !state.showBefore });
   drawOverlay();
   $('zoomLabel').textContent = Math.round(state.view.shown * 100) + '%';
   scheduleHistogram();
@@ -260,6 +293,8 @@ new ResizeObserver(() => { render(); }).observe(stage);
 /* ---------- history ---------- */
 
 function commit(label) {
+  // The preset strength slider only stays live until the next edit of any other kind.
+  if (state.preset) { state.preset = null; $('presetAmount').hidden = true; }
   const snap = JSON.stringify(state.settings);
   if (state.history[state.hIndex]?.snap === snap) return;
   state.history.length = state.hIndex + 1;
@@ -274,6 +309,7 @@ function commit(label) {
 function restore(index) {
   if (index < 0 || index >= state.history.length) return;
   state.hIndex = index;
+  state.preset = null; $('presetAmount').hidden = true;
   state.settings = normalise(JSON.parse(state.history[index].snap));
   persist();
   refreshAll();
@@ -413,7 +449,7 @@ const basic = [
   S('Exposure', 'exposure', { min: -5, max: 5, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2), onInput: () => { syncStart(); requestRender(); } }),
   S('Contrast', 'contrast'), S('Highlights', 'highlights'), S('Shadows', 'shadows'), S('Whites', 'whites'), S('Blacks', 'blacks'),
   el('div', { class: 'sub' }, 'Presence'),
-  S('Clarity', 'clarity'), S('Dehaze', 'dehaze'), S('Vibrance', 'vibrance'), S('Saturation', 'saturation'),
+  S('Texture', 'texture'), S('Clarity', 'clarity'), S('Dehaze', 'dehaze'), S('Vibrance', 'vibrance'), S('Saturation', 'saturation'),
 ];
 
 const curve = curveEditor({ get: () => state.settings.curve, onInput: requestRender, onCommit: commit });
@@ -549,8 +585,30 @@ function applyPreset(p) {
   if (!state.source) return;
   // Built-in presets start from a clean look but keep white balance; saved ones replace the whole look.
   const base = p.builtin === false ? state.settings : { ...beforeSettings(), temp: state.settings.temp, tint: state.settings.tint };
-  state.settings = applyLook(base, p.look);
+  const from = applyLook(base, {}), to = applyLook(base, p.look);
+  state.settings = clone(to);
   refreshAll(); commit('Preset: ' + p.name);
+  state.preset = { name: p.name, from, to, amount: 100 };   // set after commit, which clears it for other edits
+  refreshPresetAmount();
+}
+
+// Strength of the preset just applied: 0% is the photo without it, 100% the
+// preset as designed, up to 200% to exaggerate it.
+const presetAmount = slider({
+  label: 'Strength', min: 0, max: 200, step: 5, def: 100, format: (v) => Math.round(v) + '%',
+  get: () => state.preset?.amount ?? 100,
+  set: (v) => {
+    const p = state.preset; if (!p) return;
+    p.amount = v ?? 100;
+    state.settings = blendLook(p.from, p.to, p.amount / 100);
+  },
+  onInput: () => { const keep = state.preset; refreshAll(); state.preset = keep; refreshPresetAmount(); },
+  onCommit: () => { const keep = state.preset; commit(`Preset: ${keep.name} at ${keep.amount}%`); state.preset = keep; refreshPresetAmount(); },
+});
+$('presetAmount').append(presetAmount.node, el('p', { class: 'hint', id: 'presetNote' }));
+function refreshPresetAmount() {
+  $('presetAmount').hidden = !state.preset;
+  if (state.preset) { presetAmount.refresh(); $('presetNote').textContent = `Applies to "${state.preset.name}" until you change something else.`; }
 }
 
 $('btnSavePreset').addEventListener('click', () => {
@@ -1120,6 +1178,7 @@ window.addEventListener('keydown', (e) => {
     if (k === '[') return run(() => heal.resize(1 / 1.2));
     if (k === ']') return run(() => heal.resize(1.2));
     if (k === 'delete' || k === 'backspace') return run(() => heal.remove());
+    if (k === 's') return run(() => heal.toggleSpots());
   }
   if (state.tool === 'local') {
     if (k === '[') return run(() => locals.resizeBrush(1 / 1.15));
