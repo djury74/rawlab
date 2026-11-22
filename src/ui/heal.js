@@ -141,7 +141,7 @@ export function initHeal({ node, state, requestRender, commit, setTool, toast, s
     spotsBtn.classList.toggle('on', showSpots);
     clearBtn.disabled = !spots().length;
     const n = spots().length;
-    count.textContent = n ? `${n} spot${n === 1 ? '' : 's'}. Drag the dashed circle to change what it copies from.` : 'Click a blemish to remove it.';
+    count.textContent = n ? `${n} spot${n === 1 ? '' : 's'}. Drag the dashed circle to move its source.` : 'Click a blemish to remove it.';
   }
 
   return {

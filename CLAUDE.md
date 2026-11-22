@@ -78,6 +78,10 @@ and file layout. This file records what is not obvious from the code.
 `public/Duncans-Photo-Lab-Guide.pdf` is a guide for new users, published with
 the site. Its source is `docs/guide/guide.html` with screenshots alongside;
 regenerate the PDF with `node docs/guide/make-pdf.cjs` (uses Playwright).
+Retake the screenshots with `node docs/guide/take-screenshots.cjs` against a
+running dev server (its header comment lists the arguments), convert the PNGs
+to JPEG, then check every page of the PDF: each section is meant to fit one page.
+The screenshots still use third-party sample photos, not the owner's own.
 Update the guide and retake screenshots when features or the layout change.
 
 ## Not yet verified on the owner's machine
