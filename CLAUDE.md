@@ -44,6 +44,10 @@ and file layout. This file records what is not obvious from the code.
   lamp or window in the frame makes the first part do nothing. The first part
   was matched to the owner's viewer on a D5100 photo; keep that photo's result
   (+1.95) unchanged when retuning.
+- **Auto tone is deliberately bolder than Auto.** At the owner's request, after
+  comparing with LightCraft, it also sets Contrast +18 and Vibrance +15 (less
+  on JPEGs) and moves Highlights and Shadows on high-contrast scenes. Auto
+  itself only sets exposure and stays natural.
 - **Embedded previews may carry their own rotation mark.** Nikon marks the
   JPEG preview inside a portrait NEF as rotated, and the browser turns it when
   decoding. `embeddedPreview` reads the mark and applies LibRaw's `flip` only

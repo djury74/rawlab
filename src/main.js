@@ -426,27 +426,29 @@ function autoWhiteBalance() {
 function autoTone() {
   const t = state.source?.tone;
   if (!t) return;
-  const s = state.settings, gain = 2 ** t.exposure;
+  const s = state.settings, gain = 2 ** t.exposure, raw = state.source.kind === 'raw';
   const low = t.low * gain, high = t.high * gain;
   const e = Math.sqrt(Math.min(1, low));
   const clampTo = (v, lo, hi) => Math.round(Math.min(hi, Math.max(lo, v)));
-  const keys = ['exposure', 'highlights', 'shadows', 'whites', 'blacks'];
+  const keys = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance'];
   const before = keys.map((k) => s[k]).join();
   s.exposure = t.exposure;
   s.blacks = clampTo(-(low - 0.004) / (0.05 * (1 - e) ** 3) * 100, -40, 0);
   s.whites = high > 0 ? clampTo(Math.log2(0.8 / high) / (0.8 * Math.min(1, high)) * 100, -30, 40) : 0;
-  // A wide gap between the bright and dark parts (a lamp, a window, a bright
-  // sky): hold the bright part back and open up the darker part.
-  s.highlights = -clampTo(Math.log2(t.p90 * gain / 0.5) * 25, 0, 50);
-  s.shadows = clampTo(Math.log2(0.10 / (t.p75 > 0 ? Math.min(t.p50, t.p75) * gain : 1)) * 30 + (s.highlights < 0 ? 10 : 0), 0, 40);
-  if (s.highlights === 0) s.shadows = Math.min(s.shadows, 15);
+  // Hold back the bright part where it runs hot (a lamp, a window, a bright
+  // sky) and open up the middle and darker tones where they sit low.
+  s.highlights = -clampTo(Math.log2(t.p90 * gain / 0.5) * 40, 0, 60);
+  const mid = t.p75 > 0 ? Math.min(t.p50, t.p75) * gain : 1;
+  s.shadows = clampTo(Math.log2(0.14 / mid) * 45 + (s.highlights < 0 ? 10 : 0), 0, s.highlights < 0 ? 50 : 20);
+  // A finished look, not only a corrected one: some contrast and colour.
+  // Gentler on JPEGs, which the camera has already given both.
+  s.contrast = raw ? 18 : 8;
+  s.vibrance = raw ? 15 : 8;
   refreshAll(); commit('Auto tone');
-  // Say what happened: on a well-exposed photo the change can be too small to notice.
+  // Say what happened, so the result can be judged and adjusted.
   const sign = (v, d = 0) => (v > 0 ? '+' : '') + v.toFixed(d);
-  const result = `Exposure ${sign(s.exposure, 2)}, Highlights ${sign(s.highlights)}, Shadows ${sign(s.shadows)}, Whites ${sign(s.whites)}, Blacks ${sign(s.blacks)}`;
-  toast(keys.map((k) => s[k]).join() === before ? `Auto tone: already set (${result}).`
-    : keys.every((k) => s[k] === 0) ? 'Auto tone: this photo already spans the full range, so nothing needed changing.'
-      : `Auto tone set ${result}.`);
+  const result = `Exposure ${sign(s.exposure, 2)}, Contrast ${sign(s.contrast)}, Highlights ${sign(s.highlights)}, Shadows ${sign(s.shadows)}, Whites ${sign(s.whites)}, Blacks ${sign(s.blacks)}, Vibrance ${sign(s.vibrance)}`;
+  toast(keys.map((k) => s[k]).join() === before ? `Auto tone: already set (${result}).` : `Auto tone set ${result}.`);
 }
 
 // Starting brightness: as the camera exposed it, or lifted automatically.
@@ -463,7 +465,7 @@ const startButtons = [
   el('button', { type: 'button', title: 'Brighten so the photo uses the available range', onclick: () => setStart(true) }, 'Auto'),
 ];
 
-const autoToneBtn = el('button', { class: 'link', type: 'button', title: 'Set exposure, whites and blacks automatically so the photo uses the full range', onclick: autoTone }, 'Auto tone');
+const autoToneBtn = el('button', { class: 'link', type: 'button', title: 'Set exposure, contrast, highlights, shadows, whites, blacks and vibrance automatically for a finished look', onclick: autoTone }, 'Auto tone');
 
 const basic = [
   el('div', { class: 'row' }, el('span', {}, 'Profile'), profileSelect, el('label', { class: 'check' }, bwCheck, 'B&W')),
