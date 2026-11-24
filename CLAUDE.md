@@ -54,6 +54,11 @@ and file layout. This file records what is not obvious from the code.
   pixel in the develop shader. A plain blur left halos at hard edges. To check
   for halos, render a hard bright/dark edge with Highlights -100 and Shadows
   +100 and look at the brightness profile across it.
+- **Opening a photo is not an edit.** Settings are saved only once something
+  has been changed (`persist` in `src/main.js`), with a separate "touched"
+  mark. Early versions saved on open, which froze each photo's opening
+  brightness and marked every opened photo as edited; `savedEdits` ignores
+  those leftover records.
 - **Settings version.** `version: 2` in `src/settings.js` marks edits made on
   true linear data. Older saved edits are discarded on open. Bump it only if
   rendering changes enough to invalidate existing edits.

@@ -55,6 +55,21 @@ function busy(text) { $('busy').hidden = !text; if (text) $('busyText').textCont
 /* ---------- loading ---------- */
 
 const editKey = (src) => `rawlab:edit:${src.name}:${src.size}`;
+const touchedKey = (src) => `rawlab:touched:${src.name}:${src.size}`;
+
+// The saved edits for a photo, or null if it has none worth restoring.
+// Early versions saved a photo's settings the moment it was opened, which froze
+// the brightness it happened to open with. Those records (nothing changed,
+// exposure at zero, no "touched" mark) are not edits and are ignored.
+function savedEdits(src) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(editKey(src)) || 'null');
+    if (!saved || !(saved.version >= 2)) return null;
+    if (localStorage.getItem(touchedKey(src))) return saved;
+    const untouched = saved.exposure === 0 && JSON.stringify(normalise(saved)) === JSON.stringify(defaults());
+    return untouched ? null : saved;
+  } catch { return null; }
+}
 
 // Star rating (0 to 5) for a photo, kept in this browser.
 const ratingKey = (f) => `rawlab:rating:${f.name}:${f.size}`;
@@ -134,9 +149,8 @@ async function openFile(file) {
     state.source = source;
     let restored = false;
     try {
-      // Edits saved before version 2 were made on a different rendering; start those afresh.
-      const saved = JSON.parse(localStorage.getItem(editKey(source)) || 'null');
-      restored = saved?.version >= 2;
+      const saved = savedEdits(source);
+      restored = !!saved;
       state.settings = restored ? normalise(saved) : freshSettings();
     } catch { state.settings = freshSettings(); }
     state.history = []; state.hIndex = -1; state.restored = restored;
@@ -171,7 +185,7 @@ for (const id of ['btnOpen', 'btnOpen2']) $(id).addEventListener('click', () => 
 
 const browser = initBrowser({
   node: $('strip'), openFile, toast,
-  hasEdits: (file) => { try { return !!localStorage.getItem(editKey(file)); } catch { return false; } },
+  hasEdits: (file) => !!savedEdits(file),
   rating: getRating,
 });
 // The top bar button goes straight back to the remembered folder when there is one.
@@ -319,11 +333,16 @@ function persist() {
   if (!state.source) return;
   try {
     const key = editKey(state.source);
-    localStorage.setItem(key, JSON.stringify(state.settings));
-    if (state.hIndex > 0 || state.restored) {           // only photos that were really edited count as "previous"
+    // Opening a photo is not an edit: save only once something has been changed.
+    if (state.hIndex > 0 || state.restored) {
+      localStorage.setItem(key, JSON.stringify(state.settings));
+      localStorage.setItem(touchedKey(state.source), '1');
       const last = JSON.parse(localStorage.getItem('rawlab:last') || 'null');
       if (last && last.key !== key) localStorage.setItem('rawlab:prev', JSON.stringify(last));
       localStorage.setItem('rawlab:last', JSON.stringify({ key, name: state.source.name, look: lookOnly(state.settings) }));
+    } else {
+      // Back at the opening state (everything undone): nothing to keep.
+      localStorage.removeItem(key); localStorage.removeItem(touchedKey(state.source));
     }
   } catch { /* storage full or blocked */ }
   browser.refreshEdited();
