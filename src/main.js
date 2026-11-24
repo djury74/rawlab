@@ -1179,7 +1179,8 @@ window.rawlab.renderFull = renderFull;
 
 $('btnUndo').addEventListener('click', () => restore(state.hIndex - 1));
 $('btnRedo').addEventListener('click', () => restore(state.hIndex + 1));
-$('btnReset').addEventListener('click', () => { state.settings = freshSettings(); state.view.fit = true; refreshAll(); commit('Reset all'); });
+// Reset means everything at zero: the photo exactly as the camera recorded it.
+$('btnReset').addEventListener('click', () => { state.settings = freshSettings(); state.settings.exposure = 0; state.view.fit = true; refreshAll(); commit('Reset all'); });
 $('btnCrop').addEventListener('click', () => setTool(state.tool === 'crop' ? 'none' : 'crop'));
 $('btnHeal').addEventListener('click', () => setTool(state.tool === 'heal' ? 'none' : 'heal'));
 $('btnBefore').addEventListener('click', () => { state.showBefore = !state.showBefore; state.compare = false; updateButtons(); requestRender(); });
