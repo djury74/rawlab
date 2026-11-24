@@ -131,7 +131,7 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 .strip-list button:hover { background: var(--panel2); }
 .strip-list li.current button { border-color: var(--accent); }
 .strip-list .thumb { display: grid; place-items: center; width: 106px; height: 72px; background: #181818; border-radius: 3px; overflow: hidden; position: relative; }
-.strip-list .thumb canvas { max-width: 100%; max-height: 100%; display: block; }
+.strip-list .thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 .strip-list .nothumb { color: var(--muted); font-size: 11px; }
 .strip-list .cap { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip-list li.edited .cap::before { content: "● "; color: var(--accent); }
