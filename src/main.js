@@ -546,7 +546,8 @@ function syncLens() {
 function syncStart() {
   const e = state.settings.exposure, auto = state.source?.tone?.exposure || 0;
   startButtons[0].classList.toggle('on', !!state.source && e === 0);
-  startButtons[1].classList.toggle('on', !!state.source && Math.abs(e - auto) < 0.005);
+  // When Auto would change nothing, only As shot is marked: the two are the same thing.
+  startButtons[1].classList.toggle('on', !!state.source && auto > 0 && Math.abs(e - auto) < 0.005);
   startButtons[1].disabled = !state.source?.tone;
   autoToneBtn.disabled = !state.source?.tone;
   startButtons[1].textContent = !state.source?.tone ? 'Auto' : auto > 0 ? `Auto (+${auto.toFixed(2)})` : 'Auto (no change)';
