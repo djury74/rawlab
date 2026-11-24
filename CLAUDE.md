@@ -38,6 +38,17 @@ and file layout. This file records what is not obvious from the code.
   sets exposure automatically on first open (`toneStats` in `src/decode.js`,
   target tuned against a D5100 photo). The Standard base curve in
   `src/color.js` is a generic camera-like curve; do not refit it to one photo.
+- **Automatic exposure has two parts** (`statsFromHistogram` in `src/decode.js`):
+  lift the 99th percentile to half of white, then, if the median is still
+  below 0.10, lift up to one stop further. The second part exists because a
+  lamp or window in the frame makes the first part do nothing. The first part
+  was matched to the owner's viewer on a D5100 photo; keep that photo's result
+  (+1.95) unchanged when retuning.
+- **Embedded previews may carry their own rotation mark.** Nikon marks the
+  JPEG preview inside a portrait NEF as rotated, and the browser turns it when
+  decoding. `embeddedPreview` reads the mark and applies LibRaw's `flip` only
+  when the preview is unmarked; rotating in both places left thumbnails
+  sideways. The `imageOrientation: 'none'` option does not switch this off.
 - **Shadows and Highlights are edge-aware.** They use a guided filter built at
   low resolution in `#updateBlur` (`src/gl/renderer.js`) and evaluated per
   pixel in the develop shader. A plain blur left halos at hard edges. To check
@@ -87,8 +98,8 @@ Update the guide and retake screenshots when features or the layout change.
 ## Not yet verified on the owner's machine
 
 Installing as an app and opening NEF files from File Explorer, the folder
-picker with the real card reader, thumbnail speed from the card, portrait
-thumbnails, and spot removal on real sensor dust.
+picker with the real card reader (works, per the owner's screenshots), thumbnail
+speed from the card, the portrait thumbnail fix, and spot removal on real sensor dust.
 
 ## Ideas discussed but not built
 

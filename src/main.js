@@ -410,16 +410,23 @@ function autoTone() {
   const s = state.settings, gain = 2 ** t.exposure;
   const low = t.low * gain, high = t.high * gain;
   const e = Math.sqrt(Math.min(1, low));
-  const before = [s.exposure, s.blacks, s.whites].join();
+  const clampTo = (v, lo, hi) => Math.round(Math.min(hi, Math.max(lo, v)));
+  const keys = ['exposure', 'highlights', 'shadows', 'whites', 'blacks'];
+  const before = keys.map((k) => s[k]).join();
   s.exposure = t.exposure;
-  s.blacks = Math.round(Math.min(0, Math.max(-40, -(low - 0.004) / (0.05 * (1 - e) ** 3) * 100)));
-  s.whites = high > 0 ? Math.round(Math.min(40, Math.max(-30, Math.log2(0.8 / high) / (0.8 * Math.min(1, high)) * 100))) : 0;
+  s.blacks = clampTo(-(low - 0.004) / (0.05 * (1 - e) ** 3) * 100, -40, 0);
+  s.whites = high > 0 ? clampTo(Math.log2(0.8 / high) / (0.8 * Math.min(1, high)) * 100, -30, 40) : 0;
+  // A wide gap between the bright and dark parts (a lamp, a window, a bright
+  // sky): hold the bright part back and open up the darker part.
+  s.highlights = -clampTo(Math.log2(t.p90 * gain / 0.5) * 25, 0, 50);
+  s.shadows = clampTo(Math.log2(0.10 / (t.p75 > 0 ? Math.min(t.p50, t.p75) * gain : 1)) * 30 + (s.highlights < 0 ? 10 : 0), 0, 40);
+  if (s.highlights === 0) s.shadows = Math.min(s.shadows, 15);
   refreshAll(); commit('Auto tone');
   // Say what happened: on a well-exposed photo the change can be too small to notice.
   const sign = (v, d = 0) => (v > 0 ? '+' : '') + v.toFixed(d);
-  const result = `Exposure ${sign(s.exposure, 2)}, Whites ${sign(s.whites)}, Blacks ${sign(s.blacks)}`;
-  toast([s.exposure, s.blacks, s.whites].join() === before ? `Auto tone: already set (${result}).`
-    : s.exposure === 0 && s.blacks === 0 && s.whites === 0 ? 'Auto tone: this photo already spans the full range, so nothing needed changing.'
+  const result = `Exposure ${sign(s.exposure, 2)}, Highlights ${sign(s.highlights)}, Shadows ${sign(s.shadows)}, Whites ${sign(s.whites)}, Blacks ${sign(s.blacks)}`;
+  toast(keys.map((k) => s[k]).join() === before ? `Auto tone: already set (${result}).`
+    : keys.every((k) => s[k] === 0) ? 'Auto tone: this photo already spans the full range, so nothing needed changing.'
       : `Auto tone set ${result}.`);
 }
 

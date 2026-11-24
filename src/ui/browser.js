@@ -2,6 +2,7 @@
 // photos as a strip of thumbnails. The folder is remembered between visits.
 import LibRaw from 'libraw-wasm-nothread';
 import { el } from './controls.js';
+import { embeddedPreview } from '../decode.js';
 
 const RAW = /\.(nef|nrw|dng|cr2|cr3|arw|srf|sr2|raf|orf|rw2|pef|srw|x3f|3fr|iiq|erf|mrw)$/i;
 const BITMAP = /\.(jpe?g|png|webp)$/i;
@@ -61,11 +62,9 @@ export function initBrowser({ node, openFile, toast, hasEdits, rating }) {
     if (BITMAP.test(file.name)) return { bitmap: await createImageBitmap(file, { resizeWidth: THUMB * 2, imageOrientation: 'from-image' }), flip: 0 };
     // RAW files carry a JPEG preview made by the camera; read that instead of developing the photo.
     decoder ||= new LibRaw();
-    await decoder.open(new Uint8Array(await file.arrayBuffer()), {});
-    const [meta, thumb] = [await decoder.metadata(false), await decoder.thumbnailData()];
-    if (!thumb?.data || thumb.format !== 'jpeg') throw new Error('no preview');
-    const bitmap = await createImageBitmap(new Blob([thumb.data], { type: 'image/jpeg' }), { resizeWidth: THUMB * 2 });
-    return { bitmap, flip: meta?.flip || 0 };
+    const preview = await embeddedPreview(decoder, file, THUMB * 2);
+    if (!preview) throw new Error('no preview');
+    return preview;
   }
 
   async function loadThumb(item) {

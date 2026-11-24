@@ -23,18 +23,54 @@ for (let i = 0; i < 65536; i++) {
 
 // The JPEG preview a camera embeds in its RAW files, for showing something at
 // once while the photo is developed. Returns { bitmap, flip } or null.
+// The orientation mark (EXIF tag 0x0112) inside a JPEG, or 1 if it has none.
+// 1 means "as stored"; anything else means the browser turns the picture itself.
+export function jpegOrientation(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  try {
+    if (dv.getUint16(0) !== 0xFFD8) return 1;
+    for (let at = 2; at + 4 < dv.byteLength;) {
+      const marker = dv.getUint16(at), size = dv.getUint16(at + 2);
+      if ((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
+      if (marker === 0xFFE1 && dv.getUint32(at + 4) === 0x45786966) {          // "Exif"
+        const t = at + 10, little = dv.getUint16(t) === 0x4949;
+        const ifd = t + dv.getUint32(t + 4, little), count = dv.getUint16(ifd, little);
+        for (let i = 0; i < count; i++) {
+          const e = ifd + 2 + i * 12;
+          if (dv.getUint16(e, little) === 0x0112) return dv.getUint16(e + 8, little) || 1;
+        }
+        return 1;
+      }
+      at += 2 + size;
+    }
+  } catch { /* truncated or unusual file: treat as unmarked */ }
+  return 1;
+}
+
+// Read the JPEG preview embedded in a RAW file using the given decoder.
+// Returns { bitmap, flip } where `flip` is the rotation still to apply
+// (LibRaw's codes: 3 = 180 degrees, 5 = 90 anticlockwise, 6 = 90 clockwise).
+export async function embeddedPreview(decoder, file, maxEdge) {
+  await decoder.open(new Uint8Array(await file.arrayBuffer()), {});
+  const meta = await decoder.metadata(false);
+  const thumb = await decoder.thumbnailData();
+  if (!thumb?.data || thumb.format !== 'jpeg') return null;
+  const blob = new Blob([thumb.data], { type: 'image/jpeg' });
+  const bitmap = await createImageBitmap(blob, thumb.width > maxEdge ? { resizeWidth: maxEdge } : undefined);
+  // Some cameras (Nikon among them) mark the preview itself as rotated, and the
+  // browser then turns it when decoding. Rotating again here would leave it
+  // sideways, so only apply the RAW file's rotation when the preview is unmarked.
+  const flip = jpegOrientation(thumb.data) === 1 ? meta?.flip || 0 : 0;
+  return { bitmap, flip };
+}
+
+// The preview for the photo being opened, shown at once while it is developed.
 let previewDecoder = null;
 export async function rawPreview(file, maxEdge = 2400) {
   if (BITMAP_TYPES.test(file.name)) return null;
   try {
     previewDecoder ||= new LibRaw();
-    await previewDecoder.open(new Uint8Array(await file.arrayBuffer()), {});
-    const meta = await previewDecoder.metadata(false);
-    const thumb = await previewDecoder.thumbnailData();
-    if (!thumb?.data || thumb.format !== 'jpeg') return null;
-    const blob = new Blob([thumb.data], { type: 'image/jpeg' });
-    const bitmap = await createImageBitmap(blob, thumb.width > maxEdge ? { resizeWidth: maxEdge } : undefined);
-    return { bitmap, flip: meta?.flip || 0 };
+    return await embeddedPreview(previewDecoder, file, maxEdge);
   } catch {
     return null;
   }
@@ -134,20 +170,27 @@ function toneStats(data, scale) {
     const l = 0.2126 * LINEAR[data[i]] + 0.7152 * LINEAR[data[i + 1]] + 0.0722 * LINEAR[data[i + 2]];
     hist[Math.min(4095, Math.round(Math.sqrt(Math.min(1, l)) * 4095))]++; n++;
   }
-  return statsFromHistogram(hist, n, scale, 0.5);
+  return statsFromHistogram(hist, n, scale, 0.5, 0.10);
 }
 
-// `hist` counts pixels by sqrt(luminance) in 4096 bins. `target` is where the
-// automatic exposure puts the 99th percentile.
-function statsFromHistogram(hist, n, scale, target) {
+// `hist` counts pixels by sqrt(luminance) in 4096 bins.
+// Automatic exposure starts from the highlights: lift the 99th percentile to
+// `target`. That alone fails when a lamp or window is in the frame, because the
+// brightest part is already at white while the scene is dim. So if the middle
+// of the photo (the median) would still sit below `midTarget`, lift further,
+// by at most one stop, and let the bright part roll off.
+function statsFromHistogram(hist, n, scale, target, midTarget = 0) {
   const above = (fraction) => {            // luminance that `fraction` of the photo is brighter than
     let acc = 0, bin = 4095;
     for (; bin > 0; bin--) { acc += hist[bin]; if (acc >= n * fraction) break; }
     return (bin / 4095) ** 2 * scale;
   };
   const p99 = above(0.01);
-  const ev = p99 > 0 ? Math.round(Math.min(2.5, Math.max(0, Math.log2(target / p99))) * 20) / 20 : 0;
-  return { low: above(0.995), p99, high: above(0.001), exposure: ev };
+  const p50 = above(0.5);
+  let stops = p99 > 0 ? Math.max(0, Math.log2(target / p99)) : 0;
+  if (midTarget && p50 > 0) stops = Math.max(stops, Math.min(Math.log2(midTarget / p50), stops + 1));
+  const ev = Math.round(Math.min(2.5, Math.max(0, stops)) * 20) / 20;
+  return { low: above(0.995), p50, p75: above(0.25), p90: above(0.1), p99, high: above(0.001), exposure: ev };
 }
 
 // A few hundred thousand linear RGB samples for estimating white balance.
