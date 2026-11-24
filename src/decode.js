@@ -134,13 +134,19 @@ function toneStats(data, scale) {
     const l = 0.2126 * LINEAR[data[i]] + 0.7152 * LINEAR[data[i + 1]] + 0.0722 * LINEAR[data[i + 2]];
     hist[Math.min(4095, Math.round(Math.sqrt(Math.min(1, l)) * 4095))]++; n++;
   }
+  return statsFromHistogram(hist, n, scale, 0.5);
+}
+
+// `hist` counts pixels by sqrt(luminance) in 4096 bins. `target` is where the
+// automatic exposure puts the 99th percentile.
+function statsFromHistogram(hist, n, scale, target) {
   const above = (fraction) => {            // luminance that `fraction` of the photo is brighter than
     let acc = 0, bin = 4095;
     for (; bin > 0; bin--) { acc += hist[bin]; if (acc >= n * fraction) break; }
     return (bin / 4095) ** 2 * scale;
   };
   const p99 = above(0.01);
-  const ev = p99 > 0 ? Math.round(Math.min(2.5, Math.max(0, Math.log2(0.5 / p99))) * 20) / 20 : 0;
+  const ev = p99 > 0 ? Math.round(Math.min(2.5, Math.max(0, Math.log2(target / p99))) * 20) / 20 : 0;
   return { low: above(0.995), p99, high: above(0.001), exposure: ev };
 }
 
@@ -158,19 +164,24 @@ async function loadBitmap(file) {
   const { width, height } = bitmap;
   const probe = new OffscreenCanvas(5, 5).getContext('2d', { willReadFrequently: true });
   const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  // A small linear copy for the automatic controls. A finished image has no
+  // tone curve still to come, so automatic exposure aims higher than for RAW.
+  const sc = new OffscreenCanvas(256, Math.max(1, Math.round(256 * height / width))), sctx = sc.getContext('2d');
+  sctx.drawImage(bitmap, 0, 0, sc.width, sc.height);
+  const px = sctx.getImageData(0, 0, sc.width, sc.height).data, small = new Float32Array(px.length / 4 * 3);
+  const hist = new Uint32Array(4096);
+  for (let i = 0, o = 0; i < px.length; i += 4, o += 3) {
+    small[o] = lin(px[i]); small[o + 1] = lin(px[i + 1]); small[o + 2] = lin(px[i + 2]);
+    hist[Math.round(Math.sqrt(0.2126 * small[o] + 0.7152 * small[o + 1] + 0.0722 * small[o + 2]) * 4095)]++;
+  }
+  const tone = statsFromHistogram(hist, px.length / 4, 1, 0.8);
   return {
     kind: 'bitmap', name: file.name, size: file.size, width, height, bitmap,
     asShot: { temp: 5500, tint: 0 }, asShotKnown: false,
     info: { camera: 'Rendered image (not RAW)', lens: '', exposure: '' },
     shot: null,
-    tone: null,
-    neutral() {
-      const c = new OffscreenCanvas(256, Math.max(1, Math.round(256 * height / width))), ctx = c.getContext('2d');
-      ctx.drawImage(bitmap, 0, 0, c.width, c.height);
-      const d = ctx.getImageData(0, 0, c.width, c.height).data, out = new Float32Array(d.length / 4 * 3);
-      for (let i = 0, o = 0; i < d.length; i += 4) { out[o++] = lin(d[i]); out[o++] = lin(d[i + 1]); out[o++] = lin(d[i + 2]); }
-      return estimateNeutral(out);
-    },
+    tone,
+    neutral: () => estimateNeutral(small),
     sample(x, y) {
       probe.clearRect(0, 0, 5, 5);
       probe.drawImage(bitmap, x - 2, y - 2, 5, 5, 0, 0, 5, 5);

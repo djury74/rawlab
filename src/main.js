@@ -410,17 +410,27 @@ function autoTone() {
   const s = state.settings, gain = 2 ** t.exposure;
   const low = t.low * gain, high = t.high * gain;
   const e = Math.sqrt(Math.min(1, low));
+  const before = [s.exposure, s.blacks, s.whites].join();
   s.exposure = t.exposure;
   s.blacks = Math.round(Math.min(0, Math.max(-40, -(low - 0.004) / (0.05 * (1 - e) ** 3) * 100)));
   s.whites = high > 0 ? Math.round(Math.min(40, Math.max(-30, Math.log2(0.8 / high) / (0.8 * Math.min(1, high)) * 100))) : 0;
   refreshAll(); commit('Auto tone');
+  // Say what happened: on a well-exposed photo the change can be too small to notice.
+  const sign = (v, d = 0) => (v > 0 ? '+' : '') + v.toFixed(d);
+  const result = `Exposure ${sign(s.exposure, 2)}, Whites ${sign(s.whites)}, Blacks ${sign(s.blacks)}`;
+  toast([s.exposure, s.blacks, s.whites].join() === before ? `Auto tone: already set (${result}).`
+    : s.exposure === 0 && s.blacks === 0 && s.whites === 0 ? 'Auto tone: this photo already spans the full range, so nothing needed changing.'
+      : `Auto tone set ${result}.`);
 }
 
 // Starting brightness: as the camera exposed it, or lifted automatically.
 const setStart = (auto) => {
   if (!state.source) return;
-  state.settings.exposure = auto ? state.source.tone?.exposure || 0 : 0;
+  const ev = state.source.tone?.exposure || 0, was = state.settings.exposure;
+  state.settings.exposure = auto ? ev : 0;
   refreshAll(); commit(auto ? 'Auto exposure' : 'Exposure as shot');
+  if (auto && ev === 0) toast('Auto: this photo is already bright enough, so exposure stays as shot. Auto only ever brightens.');
+  else if (auto && was === ev) toast(`Auto is already applied (Exposure +${ev.toFixed(2)}).`);
 };
 const startButtons = [
   el('button', { type: 'button', title: 'Exposure exactly as the camera recorded it', onclick: () => setStart(false) }, 'As shot'),
@@ -536,10 +546,10 @@ function syncLens() {
 function syncStart() {
   const e = state.settings.exposure, auto = state.source?.tone?.exposure || 0;
   startButtons[0].classList.toggle('on', !!state.source && e === 0);
-  startButtons[1].classList.toggle('on', !!state.source && auto > 0 && Math.abs(e - auto) < 0.005);
-  startButtons[1].disabled = !state.source || state.source.kind !== 'raw';
+  startButtons[1].classList.toggle('on', !!state.source && Math.abs(e - auto) < 0.005);
+  startButtons[1].disabled = !state.source?.tone;
   autoToneBtn.disabled = !state.source?.tone;
-  startButtons[1].textContent = auto > 0 ? `Auto (+${auto.toFixed(2)})` : 'Auto';
+  startButtons[1].textContent = !state.source?.tone ? 'Auto' : auto > 0 ? `Auto (+${auto.toFixed(2)})` : 'Auto (no change)';
 }
 
 function syncSelects() {
