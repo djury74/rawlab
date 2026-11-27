@@ -8,7 +8,9 @@ and file layout. This file records what is not obvious from the code.
 
 - The owner is a photographer, not a programmer. Explain changes in plain
   language, say what was tested and what was not, and use UK English.
-- Camera: Nikon D5100 with the AF-S DX Nikkor 35mm f/1.8G. Uses Chrome on Windows.
+- Cameras: a Nikon Z50II with the Z DX 16-50mm f/3.5-6.3 VR, Z DX 24mm f/1.7 and
+  Z DX MC 35mm f/1.7 (from late November 2026), and before that a Nikon D5100 with
+  the AF-S DX Nikkor 35mm f/1.8G. Uses Chrome on Windows.
 - They test on the live site and report back with screenshots. Comparing a
   screenshot of the app with one of another viewer, region by region, has been
   the most reliable way to tune rendering.
@@ -53,6 +55,16 @@ and file layout. This file records what is not obvious from the code.
   decoding. `embeddedPreview` reads the mark and applies LibRaw's `flip` only
   when the preview is unmarked; rotating in both places left thumbnails
   sideways. The `imageOrientation: 'none'` option does not switch this off.
+- **Cameras newer than the decoder.** The bundled LibRaw (0.22.1) reads Z50II
+  files but has no colour calibration for the model, so it returns camera
+  colour uncorrected (all-zero `cam_xyz`). `src/cameras.js` supplies the
+  matrix and the import shader applies it (`uCam`); CPU readers go through the
+  same conversion. Add new bodies there until the decoder is updated.
+- **Nikon High Efficiency NEFs cannot be decoded** (`nikon.NEFCompression` 13
+  or 14): LibRaw returns noise without an error. `loadRaw` detects this and
+  opens the embedded full-size JPEG instead, with a notice.
+- **Sample files for Nikon Z bodies** are on raw.pixls.us (allowed in the
+  `rawlab` environment; CC0). The Z50II set includes lossless, HE and HE*.
 - **Shadows and Highlights are edge-aware.** They use a guided filter built at
   low resolution in `#updateBlur` (`src/gl/renderer.js`) and evaluated per
   pixel in the develop shader. A plain blur left halos at hard edges. To check

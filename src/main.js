@@ -8,7 +8,7 @@ import { curveEditor } from './ui/curve.js';
 import { drawHistogram } from './ui/histogram.js';
 import { hitTest, cursorFor, dragRect, drawCrop } from './ui/crop.js';
 import { initLocals } from './ui/locals.js';
-import { LENS_PROFILES, detectProfile, activeProfile, lensParams } from './lens.js';
+import { LENS_PROFILES, detectProfile, activeProfile, lensParams, profileCovers } from './lens.js';
 import { withExif, tiff16, tiff16Size } from './export.js';
 import { initBrowser } from './ui/browser.js';
 import { initHeal } from './ui/heal.js';
@@ -166,7 +166,8 @@ async function openFile(file) {
     $('exif').replaceChildren(el('b', {}, i.camera || 'Unknown camera'), [i.lens, i.exposure, i.date].filter(Boolean).join('  ·  '));
     refreshAll();
     render();                                // draw the developed photo before the preview is removed
-    if (restored) toast('Previous edits for this file were restored. Use Reset to start again.');
+    if (source.notice) toast(source.notice, true);
+    else if (restored) toast('Previous edits for this file were restored. Use Reset to start again.');
     else if (state.settings.exposure > 0) toast(`Exposure set automatically to +${state.settings.exposure.toFixed(2)}. Choose As shot to see it unadjusted.`);
   } catch (err) {
     if (token !== openToken) return;
@@ -221,7 +222,9 @@ function whiteBalance(s) {
   return wbGains(a, s.temp ?? a.temp, s.tint ?? a.tint);
 }
 
-const lensNow = () => lensParams(state.settings.lens, state.source?.shot);
+// Lens details count only for RAW files: a JPEG has already been corrected by the camera.
+const lensShot = () => (state.source?.kind === 'raw' ? state.source.shot : null);
+const lensNow = () => lensParams(state.settings.lens, lensShot());
 
 function beforeSettings() {
   const s = freshSettings(), c = state.settings;
@@ -558,17 +561,22 @@ $('panels').append(section('Lens corrections', [
 ], false));
 
 function syncLens() {
-  const lens = state.settings.lens, shot = state.source?.shot;
+  const lens = state.settings.lens, shot = lensShot();
   lensSelect.value = lens.profile;
   caCheck.checked = lens.ca;
   const active = state.source ? activeProfile(lens, shot) : null;
+  // Where on the lens the correction is taken from, and what this profile covers.
+  const at = [shot?.focal ? `${Math.round(shot.focal)} mm` : '', shot?.aperture ? `f/${+shot.aperture.toFixed(1)}` : ''].filter(Boolean).join(', ');
+  const missing = active ? [!active.vignetting && 'vignetting', !active.tca && 'colour fringing'].filter(Boolean) : [];
+  const detail = active ? `${at ? ` at ${at}` : ''}. Corrects ${profileCovers(active)}${missing.length ? `; no ${missing.join(' or ')} data exists for this lens` : ''}.` : '';
   if (!state.source) lensStatus.textContent = '';
+  else if (state.source.kind !== 'raw' && lens.profile === 'auto') lensStatus.textContent = 'Not applied: this is a JPEG, which the camera has already corrected.';
   else if (lens.profile === 'off') lensStatus.textContent = 'No lens correction applied.';
   else if (lens.profile === 'auto') {
-    lensStatus.textContent = detectProfile(shot)
-      ? `Detected and applied: ${active.name}${shot.aperture ? ` at f/${+shot.aperture.toFixed(1)}` : ''}.`
-      : 'No profile matched this lens. Choose one above if you know which lens was used.';
-  } else lensStatus.textContent = `Applied: ${active?.name}${shot?.aperture ? ` at f/${+shot.aperture.toFixed(1)}` : ' (aperture unknown, using wide open)'}.`;
+    lensStatus.textContent = active ? `Detected and applied: ${active.name}${detail}`
+      : shot?.lensName ? `No profile is available for this lens (${shot.lensName}), so no correction is applied.`
+        : 'No profile matched this lens. Choose one above if you know which lens was used.';
+  } else lensStatus.textContent = `Applied: ${active?.name}${detail}`;
 }
 
 function syncStart() {

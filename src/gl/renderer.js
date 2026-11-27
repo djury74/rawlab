@@ -154,7 +154,11 @@ export class Renderer {
     }
     const tex = this.#texture(gl.LINEAR_MIPMAP_LINEAR);
     gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(w, h))) + 1, gl.RGBA16F, w, h);
-    this.#draw(prog, tex, w, h, { uSrc: staging }, (gl, u) => gl.uniform1f(u.uScale, source.scale ?? 1));
+    this.#draw(prog, tex, w, h, { uSrc: staging }, (gl, u) => {
+      gl.uniform1f(u.uScale, source.scale ?? 1);
+      const m = source.camToRgb || [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      gl.uniformMatrix3fv(u.uCam, false, [m[0][0], m[1][0], m[2][0], m[0][1], m[1][1], m[2][1], m[0][2], m[1][2], m[2][2]]);   // column order
+    });
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.deleteTexture(staging);

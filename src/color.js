@@ -71,7 +71,7 @@ const SRGB_TO_XYZ = [
 ];
 const mul3 = (m, v) => m.map((r) => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
 
-function inv3(m) {
+export function inv3(m) {
   const [a, b, c] = m[0], [d, e, f] = m[1], [g, h, i] = m[2];
   const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
   const det = a * A + b * B + c * C;

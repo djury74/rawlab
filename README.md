@@ -41,7 +41,8 @@ because the decoder runs in a worker.
 
 `src/lens.js` holds lens profiles (distortion, lateral chromatic aberration,
 vignetting by aperture) and applies them when the file's metadata matches.
-One profile is included: Nikon AF-S DX Nikkor 35mm f/1.8G. Its calibration
+Profiles are included for the Nikon AF-S DX Nikkor 35mm f/1.8G, the Nikkor Z DX
+16-50mm f/3.5-6.3 VR and the Nikkor Z DX 24mm f/1.7. Their calibration
 values come from the [lensfun](https://lensfun.github.io) database, licensed
 CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 

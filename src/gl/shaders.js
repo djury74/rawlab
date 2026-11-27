@@ -12,6 +12,7 @@ precision highp float;
 precision highp usampler2D;
 uniform usampler2D uSrc;
 uniform float uScale;
+uniform mat3 uCam;          // camera colour to sRGB, for cameras the decoder does not know; identity otherwise
 out vec4 o;
 void main() {
   // The decoder always applies the BT.709 transfer curve; undo it to get linear
@@ -19,7 +20,7 @@ void main() {
   // are highlight detail kept from the colour channels that had not clipped.
   vec3 v = vec3(texelFetch(uSrc, ivec2(gl_FragCoord.xy), 0).rgb) / 65535.0;
   vec3 lin = mix(v / 4.5, pow((v + 0.099) / 1.099, vec3(1.0 / 0.45)), step(0.081, v));
-  o = vec4(lin * uScale, 1.0);
+  o = vec4(max(uCam * lin, 0.0) * uScale, 1.0);
 }`;
 
 // sRGB-encoded 8-bit image (JPEG/PNG); the sampler linearises it.

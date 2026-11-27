@@ -1,5 +1,6 @@
 import LibRaw from 'libraw-wasm-nothread';
 import { asShotFromCamera, estimateNeutral } from './color.js';
+import { extraCamera, displayModel } from './cameras.js';
 
 const BITMAP_TYPES = /\.(jpe?g|png|webp|avif|gif|bmp)$/i;
 
@@ -76,6 +77,10 @@ export async function rawPreview(file, maxEdge = 2400) {
   }
 }
 
+// Nikon's "High Efficiency" RAW compression (codes 13 and 14), which this
+// decoder cannot read: it returns noise instead of a picture.
+const NIKON_HIGH_EFFICIENCY = new Set([13, 14]);
+
 async function loadRaw(file) {
   const buffer = await file.arrayBuffer();
   const raw = new LibRaw();
@@ -87,6 +92,8 @@ async function loadRaw(file) {
       outputBps: 16, noAutoBright: true, useCameraWb: true,
       outputColor: 1, highlight: 2, userQual: 3, useCameraMatrix: 1,
     });
+    const before = await raw.metadata(true);
+    if (NIKON_HIGH_EFFICIENCY.has(before.nikon?.NEFCompression)) return await loadEmbeddedJpeg(raw, file, before);
     const img = await raw.imageData();
     const meta = await raw.metadata(true);
     if (!img?.data) throw new Error('The decoder returned no image data.');
@@ -99,14 +106,22 @@ async function loadRaw(file) {
     const color = meta.color_data || meta.color || {};
     const mul = (color.pre_mul || []).slice(0, 3).filter((v) => v > 0);
     const scale = mul.length === 3 ? Math.max(...mul) / Math.min(...mul) : 1;
-    const asShot = (color.cam_mul && color.cam_xyz && asShotFromCamera(color.cam_mul, color.cam_xyz)) || null;
+    // A camera newer than the decoder comes back with no colour calibration
+    // (an all-zero matrix). Use the app's own table for it if there is an entry.
+    const known = (color.cam_xyz || []).some((row) => row.some((v) => v !== 0));
+    const extra = known ? null : extraCamera(meta.camera_make, meta.camera_model);
+    const cam = extra?.toRgb || null;
+    const toRgb = cam ? (r, g, b) => [cam[0][0] * r + cam[0][1] * g + cam[0][2] * b, cam[1][0] * r + cam[1][1] * g + cam[1][2] * b, cam[2][0] * r + cam[2][1] * g + cam[2][2] * b].map((v) => Math.max(0, v)) : (r, g, b) => [r, g, b];
+    const camXyz = known ? color.cam_xyz : extra?.xyzToCam;
+    const asShot = (color.cam_mul && camXyz && asShotFromCamera(color.cam_mul, camXyz)) || null;
     return {
-      kind: 'raw', name: file.name, size: file.size, width, height, data, scale,
+      kind: 'raw', name: file.name, size: file.size, width, height, data, scale, camToRgb: cam,
       asShot: asShot || { temp: 5500, tint: 0 }, asShotKnown: !!asShot,
       info: describe(meta),
       shot: shotInfo(meta),
-      tone: toneStats(data, scale),
-      neutral: () => estimateNeutral(sampleRaw(data, scale)),
+      notice: known || extra ? null : `This camera (${displayModel(meta.camera_model)}) is newer than the app's decoder, so its colours are uncorrected and may look flat.`,
+      tone: toneStats(data, scale, toRgb),
+      neutral: () => estimateNeutral(sampleRaw(data, scale, toRgb)),
       sample(x, y, r = 2) {
         const acc = [0, 0, 0]; let n = 0;
         for (let j = Math.max(0, y - r); j <= Math.min(height - 1, y + r); j++) {
@@ -115,7 +130,7 @@ async function loadRaw(file) {
             acc[0] += LINEAR[data[o]]; acc[1] += LINEAR[data[o + 1]]; acc[2] += LINEAR[data[o + 2]]; n++;
           }
         }
-        return acc.map((v) => v * scale / n);
+        return toRgb(acc[0] / n, acc[1] / n, acc[2] / n).map((v) => v * scale);
       },
     };
   } catch (err) {
@@ -123,6 +138,22 @@ async function loadRaw(file) {
   } finally {
     raw.dispose();
   }
+}
+
+// For a RAW file whose sensor data cannot be read: open the full-size JPEG the
+// camera stored inside it, so the photo can still be viewed and edited as a JPEG.
+async function loadEmbeddedJpeg(raw, file, meta) {
+  const thumb = await raw.thumbnailData();
+  if (!thumb?.data || thumb.format !== 'jpeg') {
+    throw new Error('It uses Nikon High Efficiency compression, which this app cannot read. Set RAW recording to "Lossless compression" in the camera.');
+  }
+  const source = await loadBitmap(new File([thumb.data], file.name, { type: 'image/jpeg' }));
+  const info = describe(meta);
+  return {
+    ...source, size: file.size, shot: shotInfo(meta),
+    info: { ...info, camera: `${info.camera} (embedded JPEG, not RAW)` },
+    notice: 'This file uses Nikon High Efficiency compression, which the app cannot read. Showing the JPEG the camera stored inside it instead. For full RAW editing, set RAW recording to "Lossless compression" in the camera\'s menu.',
+  };
 }
 
 // The decoder returns every usable sensor pixel, a few more than the camera
@@ -163,11 +194,12 @@ function trimToCameraSize(data, width, height, meta) {
 // exposure in stops that brings the 99th percentile to half of white. The
 // Standard tone curve renders that as a bright highlight; brighter targets
 // washed out indoor shots. Exposure only ever brightens.
-function toneStats(data, scale) {
+function toneStats(data, scale, toRgb) {
   const hist = new Uint32Array(4096);
   let n = 0;
   for (let i = 0; i < data.length; i += 3 * 61) {
-    const l = 0.2126 * LINEAR[data[i]] + 0.7152 * LINEAR[data[i + 1]] + 0.0722 * LINEAR[data[i + 2]];
+    const c = toRgb(LINEAR[data[i]], LINEAR[data[i + 1]], LINEAR[data[i + 2]]);
+    const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     hist[Math.min(4095, Math.round(Math.sqrt(Math.min(1, l)) * 4095))]++; n++;
   }
   return statsFromHistogram(hist, n, scale, 0.5, 0.10);
@@ -194,11 +226,14 @@ function statsFromHistogram(hist, n, scale, target, midTarget = 0) {
 }
 
 // A few hundred thousand linear RGB samples for estimating white balance.
-function sampleRaw(data, scale) {
+function sampleRaw(data, scale, toRgb) {
   const step = Math.max(1, Math.floor(data.length / 3 / 200000)) * 3;
   const out = new Float32Array(Math.ceil(data.length / step) * 3);
   let o = 0;
-  for (let i = 0; i + 2 < data.length; i += step) { out[o++] = LINEAR[data[i]] * scale; out[o++] = LINEAR[data[i + 1]] * scale; out[o++] = LINEAR[data[i + 2]] * scale; }
+  for (let i = 0; i + 2 < data.length; i += step) {
+    const c = toRgb(LINEAR[data[i]], LINEAR[data[i + 1]], LINEAR[data[i + 2]]);
+    out[o++] = c[0] * scale; out[o++] = c[1] * scale; out[o++] = c[2] * scale;
+  }
   return out.subarray(0, o);
 }
 
@@ -263,7 +298,7 @@ function describe(meta) {
   const date = meta.timestamp instanceof Date && meta.timestamp.getTime() > 0
     ? meta.timestamp.toISOString().slice(0, 16).replace('T', ' ') : '';
   return {
-    camera: [meta.camera_make, meta.camera_model].filter(Boolean).join(' ').trim(),
+    camera: [meta.camera_make, displayModel(meta.camera_model)].filter(Boolean).join(' ').trim(),
     lens, exposure: parts.join('  ·  '), date,
   };
 }
