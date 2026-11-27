@@ -309,7 +309,9 @@ export class Renderer {
     gl.uniform2f(u.uSize, this.src.w, this.src.h);
   }
 
-  // lens: { dist: [a, b, c], tca: [kr, kb], vig: [k1, k2, k3] } or null
+  // lens: { dist: [a, b, c], tca: [kr, kb], vig: [k1, k2, k3] } from a lens profile,
+  // optionally with camera: { poly: [p2, p4, p6], zoom, amount, centre: [x, y] } to use
+  // the camera's own distortion correction instead of the profile's. null = no correction.
   #lensUniforms(gl, u, lens) {
     gl.uniform1i(u.uLens, lens ? 1 : 0);
     if (!lens) return;
@@ -317,6 +319,13 @@ export class Renderer {
     gl.uniform3fv(u.uDist, lens.dist);
     gl.uniform2fv(u.uTca, lens.tca);
     gl.uniform3fv(u.uVig, lens.vig);
+    gl.uniform1i(u.uLensModel, lens.camera ? 1 : 0);
+    if (lens.camera) {
+      gl.uniform3fv(u.uPoly, lens.camera.poly);
+      gl.uniform1f(u.uZoom, lens.camera.zoom);
+      gl.uniform1f(u.uLensAmount, lens.camera.amount);
+      gl.uniform2fv(u.uCentre, lens.camera.centre);
+    }
   }
 
   #localUniforms(gl, u, s, showMask) {

@@ -40,6 +40,11 @@ uniform vec2 uSize;        // source size in pixels
 uniform vec3 uDist;        // ptlens a, b, c
 uniform vec2 uTca;         // red and blue magnification
 uniform vec3 uVig;         // k1, k2, k3
+uniform int uLensModel;    // 0 = lens-profile polynomial, 1 = the camera's own radial correction
+uniform vec3 uPoly;        // model 1: coefficients for p^2, p^4, p^6
+uniform float uZoom;       // model 1: 1 + q
+uniform float uLensAmount; // model 1: strength, 1 = as recorded
+uniform vec2 uCentre;      // model 1: optical centre, pixels from the image centre
 uniform int uSpotN;
 uniform vec4 uSpot[40];    // blemish centre (xy) and source centre (zw), in image uv
 uniform vec2 uSpotR[40];   // radius as a fraction of the long edge, feather
@@ -48,6 +53,12 @@ out vec4 o;
 
 // Where the lens actually put the point that belongs at corrected position uv.
 vec2 lensOffset(vec2 uv) {
+  if (uLensModel == 1) {
+    vec2 q = (uv - 0.5) * uSize - uCentre;
+    float p2 = dot(q, q) / (0.25 * dot(uSize, uSize));
+    float s = (1.0 + p2 * (uPoly.x + p2 * (uPoly.y + p2 * uPoly.z))) / uZoom;
+    return q * (1.0 + uLensAmount * (s - 1.0)) + uCentre;
+  }
   vec2 d = (uv - 0.5) * uSize;
   float ru = length(d) / (0.5 * min(uSize.x, uSize.y));
   return d * (((uDist.x * ru + uDist.y) * ru + uDist.z) * ru + 1.0 - uDist.x - uDist.y - uDist.z);

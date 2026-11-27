@@ -46,6 +46,11 @@ Profiles are included for the Nikon AF-S DX Nikkor 35mm f/1.8G, the Nikkor Z DX
 values come from the [lensfun](https://lensfun.github.io) database, licensed
 CC BY-SA 3.0. To add a lens, copy its values from lensfun into `LENS_PROFILES`.
 
+For Nikon Z cameras, `src/nikon.js` reads the distortion correction the camera
+stores in each RAW file, so every Z lens is corrected as the camera corrects its
+own JPEGs. `src/cameras.js` adds colour calibration for cameras newer than the
+bundled decoder (currently the Nikon Z50II).
+
 ## Browsing a card and installing
 
 - **Open card or folder** lists the photos in a folder (and its subfolders) as a

@@ -224,7 +224,8 @@ function whiteBalance(s) {
 
 // Lens details count only for RAW files: a JPEG has already been corrected by the camera.
 const lensShot = () => (state.source?.kind === 'raw' ? state.source.shot : null);
-const lensNow = () => lensParams(state.settings.lens, lensShot());
+const cameraLens = () => (state.source?.kind === 'raw' ? state.source.lensData || null : null);
+const lensNow = () => lensParams(state.settings.lens, lensShot(), cameraLens());
 
 function beforeSettings() {
   const s = freshSettings(), c = state.settings;
@@ -561,22 +562,31 @@ $('panels').append(section('Lens corrections', [
 ], false));
 
 function syncLens() {
-  const lens = state.settings.lens, shot = lensShot();
+  const lens = state.settings.lens, shot = lensShot(), own = lens.profile === 'auto' ? cameraLens() : null;
   lensSelect.value = lens.profile;
   caCheck.checked = lens.ca;
   const active = state.source ? activeProfile(lens, shot) : null;
-  // Where on the lens the correction is taken from, and what this profile covers.
+  // Where on the lens the correction is taken from, and what is and is not covered.
   const at = [shot?.focal ? `${Math.round(shot.focal)} mm` : '', shot?.aperture ? `f/${+shot.aperture.toFixed(1)}` : ''].filter(Boolean).join(', ');
-  const missing = active ? [!active.vignetting && 'vignetting', !active.tca && 'colour fringing'].filter(Boolean) : [];
-  const detail = active ? `${at ? ` at ${at}` : ''}. Corrects ${profileCovers(active)}${missing.length ? `; no ${missing.join(' or ')} data exists for this lens` : ''}.` : '';
-  if (!state.source) lensStatus.textContent = '';
-  else if (state.source.kind !== 'raw' && lens.profile === 'auto') lensStatus.textContent = 'Not applied: this is a JPEG, which the camera has already corrected.';
-  else if (lens.profile === 'off') lensStatus.textContent = 'No lens correction applied.';
-  else if (lens.profile === 'auto') {
-    lensStatus.textContent = active ? `Detected and applied: ${active.name}${detail}`
-      : shot?.lensName ? `No profile is available for this lens (${shot.lensName}), so no correction is applied.`
-        : 'No profile matched this lens. Choose one above if you know which lens was used.';
-  } else lensStatus.textContent = `Applied: ${active?.name}${detail}`;
+  const where = at ? ` at ${at}` : '';
+  const extras = active ? [active.vignetting && 'vignetting', active.tca && 'colour fringing'].filter(Boolean) : [];
+  const lacking = ['vignetting', 'colour fringing'].filter((x) => !extras.includes(x));
+  let text = '';
+  if (!state.source) text = '';
+  else if (state.source.kind !== 'raw' && lens.profile === 'auto') text = 'Not applied: this is a JPEG, which the camera has already corrected.';
+  else if (lens.profile === 'off') text = 'No lens correction applied.';
+  else if (own) {
+    text = `Distortion corrected with the camera's own data stored in this file${shot?.lensName ? ` (${shot.lensName}${where})` : where}.`
+      + (extras.length ? ` The ${active.name} profile adds ${extras.join(' and ')} correction.` : '')
+      + (lacking.length ? ` No ${lacking.join(' or ')} data is available for this lens.` : '');
+  } else if (active) {
+    const missing = [!active.vignetting && 'vignetting', !active.tca && 'colour fringing'].filter(Boolean);
+    text = `${lens.profile === 'auto' ? 'Detected and applied' : 'Applied'}: ${active.name}${where}. Corrects ${profileCovers(active)}${missing.length ? `; no ${missing.join(' or ')} data exists for this lens` : ''}.`;
+  } else if (lens.profile === 'auto') {
+    text = shot?.lensName ? `No profile is available for this lens (${shot.lensName}), so no correction is applied.`
+      : 'No profile matched this lens. Choose one above if you know which lens was used.';
+  }
+  lensStatus.textContent = text;
 }
 
 function syncStart() {

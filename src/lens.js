@@ -134,21 +134,27 @@ function vignettingAt(table, aperture) {
 }
 
 // Shader parameters for the current settings, or null when no correction applies.
-export function lensParams(lens, shot) {
+// `camera` is the distortion correction the camera stored in the file, if any
+// (see nikon.js). In Automatic mode it takes precedence over a profile's
+// distortion: it is the maker's own correction and exists for every lens.
+// A profile still supplies vignetting and colour fringing where it has them.
+export function lensParams(lens, shot, camera = null) {
   const p = activeProfile(lens, shot);
-  if (!p) return null;
+  const own = lens.profile === 'auto' ? camera : null;
+  if (!p && !own) return null;
   const focal = shot?.focal, d = lens.distortion / 100, v = lens.vignetting / 100;
-  const [d0, d1, dt] = bracket(p.distortion, focal);
-  let tca = [1, 1];
-  if (p.tca && lens.ca) { const [t0, t1, tt] = bracket(p.tca, focal); tca = [mix(t0.kr, t1.kr, tt), mix(t0.kb, t1.kb, tt)]; }
-  let vig = [0, 0, 0];
-  if (p.vignetting) {
-    const [v0, v1, vt] = bracket(p.vignetting, focal);
-    const a = vignettingAt(v0.byAperture, shot?.aperture), b = vignettingAt(v1.byAperture, shot?.aperture);
-    vig = a.map((k, i) => mix(k, b[i], vt) * v);
+  let dist = [0, 0, 0], tca = [1, 1], vig = [0, 0, 0];
+  if (p) {
+    const [d0, d1, dt] = bracket(p.distortion, focal);
+    if (!own) dist = [mix(d0.a, d1.a, dt) * d, mix(d0.b, d1.b, dt) * d, mix(d0.c, d1.c, dt) * d];
+    if (p.tca && lens.ca) { const [t0, t1, tt] = bracket(p.tca, focal); tca = [mix(t0.kr, t1.kr, tt), mix(t0.kb, t1.kb, tt)]; }
+    if (p.vignetting) {
+      const [v0, v1, vt] = bracket(p.vignetting, focal);
+      const a = vignettingAt(v0.byAperture, shot?.aperture), b = vignettingAt(v1.byAperture, shot?.aperture);
+      vig = a.map((k, i) => mix(k, b[i], vt) * v);
+    }
   }
-  return {
-    dist: [mix(d0.a, d1.a, dt) * d, mix(d0.b, d1.b, dt) * d, mix(d0.c, d1.c, dt) * d],
-    tca, vig,
-  };
+  const out = { dist, tca, vig };
+  if (own) out.camera = { poly: [own.k3, own.k2, own.k1], zoom: 1 + own.zoom, amount: d, centre: own.centre };
+  return out;
 }

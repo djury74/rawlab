@@ -60,6 +60,15 @@ and file layout. This file records what is not obvious from the code.
   colour uncorrected (all-zero `cam_xyz`). `src/cameras.js` supplies the
   matrix and the import shader applies it (`uCam`); CPU readers go through the
   same conversion. Add new bodies there until the decoder is updated.
+- **Nikon Z lenses are corrected from data in the file.** `src/nikon.js` reads
+  the distortion correction Nikon stores in each mirrorless NEF (tag 0xc7d5)
+  and the resampling shader applies it (lens model 1). It was checked on
+  Z50II files in three image shapes against the camera's own JPEG (median
+  error 0.1 to 0.4 px at full size, against about 29 px uncorrected); the
+  scripts for that measurement are described in the file's header. A lensfun
+  profile still supplies vignetting and colour fringing where it has them.
+  Nikon's vignetting and colour fringing entries (6 and 7) are not decoded.
+  The Z DX MC 35mm f/1.7 has no lensfun entry, so it gets distortion only.
 - **Nikon High Efficiency NEFs cannot be decoded** (`nikon.NEFCompression` 13
   or 14): LibRaw returns noise without an error. `loadRaw` detects this and
   opens the embedded full-size JPEG instead, with a notice.

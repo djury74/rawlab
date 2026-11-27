@@ -1,6 +1,7 @@
 import LibRaw from 'libraw-wasm-nothread';
 import { asShotFromCamera, estimateNeutral } from './color.js';
 import { extraCamera, displayModel } from './cameras.js';
+import { nikonDistortion } from './nikon.js';
 
 const BITMAP_TYPES = /\.(jpe?g|png|webp|avif|gif|bmp)$/i;
 
@@ -83,6 +84,7 @@ const NIKON_HIGH_EFFICIENCY = new Set([13, 14]);
 
 async function loadRaw(file) {
   const buffer = await file.arrayBuffer();
+  const lensData = nikonDistortion(buffer);       // read before the decoder takes the buffer
   const raw = new LibRaw();
   try {
     // highlight: 2 keeps data above the point where the first channel clips and
@@ -115,7 +117,7 @@ async function loadRaw(file) {
     const camXyz = known ? color.cam_xyz : extra?.xyzToCam;
     const asShot = (color.cam_mul && camXyz && asShotFromCamera(color.cam_mul, camXyz)) || null;
     return {
-      kind: 'raw', name: file.name, size: file.size, width, height, data, scale, camToRgb: cam,
+      kind: 'raw', name: file.name, size: file.size, width, height, data, scale, camToRgb: cam, lensData,
       asShot: asShot || { temp: 5500, tint: 0 }, asShotKnown: !!asShot,
       info: describe(meta),
       shot: shotInfo(meta),
